@@ -21,6 +21,8 @@ Keys are project-scoped — you can only ever see your own project's data.
 Event: `{name, url, referrer, session_id, visitor_id, device, browser, os, country,
 props{}, revenue_amount, revenue_currency, at?}`. `name: "pageview"` for page views;
 `"revenue"` with `revenue_amount` for purchases. UTM params are parsed from `url`
+query strings; the JS tracker persists landing UTMs for the whole session, so
+conversions attribute back to the campaign even when the checkout URL is clean.
 server-side. Works browser-to-server *and* server-to-server (ad-blocker-proof).
 
 ## Query (read key)
@@ -34,7 +36,7 @@ server-side. Works browser-to-server *and* server-to-server (ad-blocker-proof).
 | GET | `/api/v1/query/metrics` | metric/dimension catalog (agent entry point) |
 | GET | `/api/v1/query/realtime` | last-30-min activity |
 | GET | `/api/v1/query/revenue` | total, transactions, revenue_per_visitor, by_source, timeseries |
-| GET | `/api/v1/query/anomalies` | z-score spikes/dips on daily pageviews + revenue |
+| GET | `/api/v1/query/anomalies` | robust anomalies on daily pageviews + revenue (same-weekday median/MAD baseline, sustained multi-day runs, partial current day excluded from dip detection) |
 | GET | `/api/v1/query/mcp-usage` | agent tool-call counts, error rates, recent questions |
 
 All range queries accept `date_from` / `date_to` (ISO 8601, default last 30 days).

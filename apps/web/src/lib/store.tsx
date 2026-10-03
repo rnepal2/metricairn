@@ -3,6 +3,7 @@ import { rangeFor } from '@/lib/utils'
 
 export type PageKey =
   | 'overview' | 'realtime' | 'events' | 'revenue' | 'funnels' | 'ask' | 'alerts' | 'mcp' | 'settings'
+  | 'demo' // public guided demo — no login required
 
 interface AppState {
   page: PageKey

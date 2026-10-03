@@ -52,7 +52,13 @@ def heuristic_plan(question: str) -> dict:
         return plan
 
     if any(w in q for w in ("anomal", "spike", "dip", "unusual", "weird")):
+        if any(w in q for w in ("why", "what happened", "explain", "because", "cause")):
+            return base("explain")
         return base("anomalies")
+    if any(w in q for w in ("funnel", "leak", "drop-off", "dropoff", "convert")):
+        return base("funnels")
+    if any(w in q for w in ("content", "blog", "post", "article")):
+        return base("breakdown", dimension="utm_campaign")
     if any(w in q for w in ("right now", "realtime", "real-time", "live", "currently")):
         return base("realtime")
     if "funnel" in q:
@@ -81,7 +87,7 @@ def heuristic_plan(question: str) -> dict:
 
 
 PLAN_SCHEMA_HINT = """Return ONLY a JSON object with this shape:
-{"action": one of [overview, timeseries_smart, breakdown, revenue, revenue_by_source, realtime, anomalies, funnels, mcp_usage],
+{"action": one of [overview, timeseries_smart, breakdown, revenue, revenue_by_source, realtime, anomalies, explain, funnels, mcp_usage],
  "dimension": optional one of [path, referrer, utm_source, utm_medium, utm_campaign, device, browser, os, country, event],
  "metric": optional one of [visitors, pageviews, sessions, events, revenue],
  "days": optional integer lookback window}

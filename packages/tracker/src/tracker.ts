@@ -65,7 +65,7 @@
     return id;
   }
 
-  function sessionId(): string {
+  function sessionId(): { id: string; isNew: boolean } {
     const now = Date.now();
     const raw = stored("al_sid");
     if (raw) {
@@ -73,7 +73,7 @@
         const [id, ts] = JSON.parse(raw) as [string, number];
         if (now - ts < SESSION_TTL_MS) {
           store("al_sid", JSON.stringify([id, now]));
-          return id;
+          return { id, isNew: false };
         }
       } catch {
         /* fall through */
@@ -81,7 +81,29 @@
     }
     const id = rand();
     store("al_sid", JSON.stringify([id, now]));
-    return id;
+    return { id, isNew: true };
+  }
+
+  // UTM params are landing attributes: capture them once per session and stamp
+  // them onto every later event, so signups and revenue attribute back to the
+  // campaign that brought the visitor — even when the checkout URL is clean.
+  function sessionUtms(isNew: boolean): string {
+    if (isNew) {
+      const parts: string[] = [];
+      new URLSearchParams(location.search).forEach((v, k) => {
+        if (k.indexOf("utm_") === 0 && !parts.some((p) => p.indexOf(k + "=") === 0)) {
+          parts.push(k + "=" + encodeURIComponent(v));
+        }
+      });
+      store("al_utm", parts.join("&"));
+    }
+    return stored("al_utm") || "";
+  }
+
+  function eventUrl(utm: string): string {
+    const href = location.href;
+    if (!utm || /[?&]utm_/.test(href)) return href;
+    return href + (href.indexOf("?") === -1 ? "?" : "&") + utm;
   }
 
   function deviceInfo(): { device: string; browser: string; os: string } {
@@ -109,11 +131,12 @@
   function enqueue(name: string, props: Props = {}, revenue_amount = 0, revenue_currency = ""): void {
     if (!API || !KEY) return;
     const { device, browser, os } = deviceInfo();
+    const { id: sid, isNew } = sessionId();
     queue.push({
       name,
-      url: location.href,
+      url: eventUrl(sessionUtms(isNew)),
       referrer: document.referrer,
-      session_id: sessionId(),
+      session_id: sid,
       visitor_id: visitorId(),
       device,
       browser,

@@ -6,12 +6,14 @@ chart spec the dashboard renders. Every question is logged as an `ask` event so
 the product observes its own agent usage (see /query/mcp-usage).
 """
 
+from datetime import datetime, timedelta
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import require_read_key
-from app.models import ApiKey, Event
+from app.models import ApiKey, Event, Note
 from app.schemas import AskOut, AskRequest
 from app.services import analytics, anomaly, nl
 from app.services.analytics import parse_range
@@ -62,11 +64,17 @@ def _execute(db: Session, project_id: str, action: str, plan: dict, start, end):
         rows = analytics.breakdown(db, project_id, dimension, start, end, limit=10)
         if not rows:
             return f"No {dimension} data in this period.", [], None
-        top = rows[0]
+        # "(not set)" is honest data, but the headline should name a real value.
+        named = [r for r in rows if r["value"] not in ("(not set)", "")]
+        top = named[0] if named else rows[0]
         answer = (
             f"Top {dimension}: '{top['value']}' with {top['visitors']:,} visitors "
             f"({top['pageviews']:,} pageviews)."
         )
+        rev_leader = max(named or rows, key=lambda r: r["revenue"])
+        if rev_leader["revenue"] > 0 and rev_leader["value"] != top["value"]:
+            cur = analytics.overview(db, project_id, start, end)["revenue_currency"]
+            answer += f" Top by revenue: '{rev_leader['value']}' at {rev_leader['revenue']:,.2f} {cur}."
         chart = {"type": "bar", "x_key": "value", "y_key": "visitors", "title": f"Visitors by {dimension}"}
         return answer, rows, chart
 
@@ -103,6 +111,9 @@ def _execute(db: Session, project_id: str, action: str, plan: dict, start, end):
         )
         return answer, found, None
 
+    if action == "explain":
+        return _explain(db, project_id, start, end)
+
     if action == "funnels":
         from app.models import Funnel
 
@@ -110,12 +121,26 @@ def _execute(db: Session, project_id: str, action: str, plan: dict, start, end):
         if not funnels:
             return "No funnels defined yet. Create one in the dashboard under Funnels.", [], None
         rows = []
+        detail = ""
         for f in funnels:
             steps = analytics.funnel_report(db, project_id, f.steps, start, end)
             overall = steps[-1]["conversion_from_start"] if steps else 0
             rows.append({"funnel": f.name, "overall_conversion": overall, "entered": steps[0]["visitors"] if steps else 0})
+            if not detail and len(steps) >= 2:
+                leaks = [
+                    (steps[i]["step"]["value"], steps[i]["conversion_from_prev"])
+                    for i in range(1, len(steps))
+                ]
+                worst_step, worst_conv = min(leaks, key=lambda x: x[1])
+                seq = " → ".join(
+                    f"{s['step']['value']} ({s['conversion_from_start']:.1%})" for s in steps
+                )
+                detail = (
+                    f" '{f.name}': {steps[0]['visitors']:,} entered; {seq}. "
+                    f"Biggest leak: → {worst_step} ({worst_conv:.1%} step conversion)."
+                )
         best = max(rows, key=lambda r: r["overall_conversion"])
-        answer = f"{len(rows)} funnels. Best converting: '{best['funnel']}' at {best['overall_conversion']:.1%}."
+        answer = f"{len(rows)} funnel(s). Best converting: '{best['funnel']}' at {best['overall_conversion']:.1%}." + detail
         return answer, rows, None
 
     if action == "mcp_usage":
@@ -130,3 +155,108 @@ def _execute(db: Session, project_id: str, action: str, plan: dict, start, end):
 
     o = analytics.overview(db, project_id, start, end)
     return f"{o['visitors']:,} visitors, {o['pageviews']:,} pageviews in this period.", [o], None
+
+
+def _explain(db: Session, project_id: str, start, end):
+    """Explain the most significant anomaly: detect it, localize the segment
+    that moved, check whether demand (traffic) moved with it, and cite any
+    timeline notes near the window. Heuristic — the planner is disclosed."""
+    found = anomaly.detect(db, project_id, start, end)
+    if not found:
+        return "No significant anomalies in pageviews or revenue for this period.", [], None
+
+    dips = [a for a in found if a["direction"] == "dip"]
+    a = (dips or found)[0]
+    # Expand the headline anomaly across consecutive same-direction days so a
+    # multi-day outage reads as one window, not isolated daily flags.
+    peers = sorted(
+        [x for x in found if x["direction"] == a["direction"] and x["metric"] == a["metric"]],
+        key=lambda x: x["date"],
+    )
+    span = [a["date"]]
+    if not a.get("sustained"):
+        by_date = {x["date"]: x for x in peers}
+        d = datetime.fromisoformat(a["date"])
+        while (d - timedelta(days=1)).date().isoformat() in by_date:
+            d -= timedelta(days=1)
+            span.insert(0, d.date().isoformat())
+        d = datetime.fromisoformat(a["date"])
+        while (d + timedelta(days=1)).date().isoformat() in by_date:
+            d += timedelta(days=1)
+            span.append(d.date().isoformat())
+    d0 = datetime.fromisoformat(span[0])
+    d1 = datetime.fromisoformat(a.get("date_end", span[-1]))
+    days = a.get("days", len(span))
+    d0_start = d0
+    d0_end = d1 + timedelta(days=1) - timedelta(seconds=1)
+    base_start, base_end = d0 - timedelta(days=14), d0 - timedelta(seconds=1)
+
+    metric_key = "revenue" if a["metric"] == "revenue" else "pageviews"
+    unit = "$" if metric_key == "revenue" else ""
+
+    def window_total(metric: str, w0, w1) -> float:
+        return sum(p["value"] for p in analytics.timeseries(db, project_id, metric, w0, w1))
+
+    t_total = window_total(metric_key, d0_start, d0_end)
+    b_total = window_total(metric_key, base_start, base_end) / 14 * days
+
+    when = f"{span[0]} to {span[-1]} ({days} days)" if days > 1 else span[0]
+    parts = [
+        f"{a['metric'].title()} {a['direction']} {when}: "
+        f"{unit}{t_total:,.0f} vs ~{unit}{b_total:,.0f} expected (z={a['z_score']})."
+    ]
+
+    if b_total > 0 and t_total <= 0.15 * b_total:
+        # Total outage across every segment — the strongest possible signal.
+        parts.append("The drop hit every device, browser, and source at once.")
+    else:
+        # Localize: which segment's metric moved most vs its own baseline.
+        best: tuple | None = None  # (dim, segment, target, delta, baseline)
+        for dim in ("device", "browser", "utm_source"):
+            tgt = {r["value"]: r[metric_key] for r in analytics.breakdown(db, project_id, dim, d0_start, d0_end)}
+            base = {
+                r["value"]: r[metric_key] / 14 * days
+                for r in analytics.breakdown(db, project_id, dim, base_start, base_end)
+            }
+            for seg, tv in tgt.items():
+                bv = base.get(seg, 0.0)
+                delta = tv - bv
+                if best is None or (a["direction"] == "dip" and delta < best[3]) or (
+                    a["direction"] == "spike" and delta > best[3]
+                ):
+                    best = (dim, seg, tv, delta, bv)
+        if best:
+            dim, seg, tv, _delta, bv = best
+            verb = "drove the drop" if a["direction"] == "dip" else "drove the spike"
+            parts.append(f"Segment check: {dim} '{seg}' {verb} ({unit}{tv:,.0f} vs ~{unit}{bv:,.0f} normally).")
+
+    # Demand check: did traffic move with the metric?
+    if metric_key == "revenue":
+        pv_t = window_total("pageviews", d0_start, d0_end)
+        pv_b = window_total("pageviews", base_start, base_end) / 14 * days
+        if pv_b > 0 and pv_t >= 0.7 * pv_b:
+            parts.append(
+                f"Pageviews held at {pv_t:,.0f} vs ~{pv_b:,.0f} normally — traffic was fine, "
+                "so this looks like a checkout or payment failure, not a demand problem."
+            )
+        elif pv_b > 0:
+            parts.append(
+                f"Pageviews also fell ({pv_t:,.0f} vs ~{pv_b:,.0f}), so demand dropped too — "
+                "check campaigns and sources, not just checkout."
+            )
+
+    # Timeline notes near the anomaly window often name the cause (deploys, launches).
+    notes = (
+        db.query(Note)
+        .filter(
+            Note.project_id == project_id,
+            Note.at >= d0 - timedelta(days=2),
+            Note.at <= d1 + timedelta(days=2),
+        )
+        .order_by(Note.at)
+        .all()
+    )
+    if notes:
+        parts.append("Timeline notes around that window: " + "; ".join(f"'{n.text}' ({n.at.date()})" for n in notes) + ".")
+
+    return " ".join(parts), found, None

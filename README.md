@@ -40,16 +40,46 @@ python -m agentlens_mcp   # stdio; add to Claude Code / Cursor / Claude Desktop
 ```
 
 Try in the dashboard's **Ask AI** page: *"Where is revenue coming from?"*,
-*"What were my top pages last week?"*, *"Any anomalies?"*
+*"What were my top pages last week?"*, *"Any anomalies?"*,
+*"Why did revenue dip recently?"* (the last one explains the anomaly — segment,
+demand check, and timeline notes).
+
+## Live customer demo: Billwise
+
+The fastest way to feel the product: a guided, realistic customer story.
+
+```bash
+# Seed the Billwise demo (fictional $10k MRR invoicing SaaS, 60 days of data)
+python scripts/seed_billwise.py
+# → prints a deterministic demo read key
+
+# Open http://localhost:5173 → "explore the Billwise live demo →"
+```
+
+No login needed. The demo page walks through three moments from solo founder
+"Maya Chen", each with a real agent Q&A transcript and live charts:
+
+1. **The Monday alert** — *"Why did revenue dip recently?"* → "$0 for 4 days vs
+   ~$1,473 expected; traffic held, so this looks like a checkout failure, not
+   demand" — citing her deploy note. A ~$9,800/mo leak found in 90 seconds.
+2. **Content ROI** — *"Which content actually drives trials?"* → one 3-year-old
+   template post beats her Product Hunt launch on attributed revenue. (The
+   tracker persists landing UTMs for the whole session, so clean checkout URLs
+   still credit the content.)
+3. **The funnel leak** — *"Where does checkout leak the most?"* → per-step
+   conversion with the biggest leak named.
+
+The dataset is simulated (`scripts/seed_billwise.py`); every number on the demo
+page is computed live from it.
 
 ## What's inside
 
 | App | Stack | What it does |
 |---|---|---|
-| `apps/api` | Python, FastAPI, SQLAlchemy | Event ingest, query engine (overview, timeseries, breakdowns, funnels, revenue attribution, z-score anomalies), NL ask endpoint, project API keys |
-| `apps/web` | React, TypeScript, Vite, shadcn-style, Recharts | Dashboard: Overview, Realtime, Events, Revenue, Funnels, Ask AI, Alerts, Agent usage, Settings |
+| `apps/api` | Python, FastAPI, SQLAlchemy | Event ingest, query engine (overview, timeseries, breakdowns, funnels, revenue attribution, robust anomalies), NL ask endpoint, project API keys |
+| `apps/web` | React, TypeScript, Vite, shadcn-style, Recharts | Dashboard: Overview, Realtime, Events, Revenue, Funnels, Ask AI, Alerts, Agent usage, Settings, Billwise demo |
 | `apps/mcp-server` | Python, `mcp` | 10 curated read-only tools (stdio + streamable HTTP), self-usage reporting |
-| `packages/tracker` | TypeScript → IIFE | <4KB cookieless snippet, SPA-aware, `agentlens.event()` / `agentlens.revenue()` |
+| `packages/tracker` | TypeScript → IIFE | <4KB cookieless snippet, SPA-aware, session UTM persistence, `agentlens.event()` / `agentlens.revenue()` |
 | `skills/agentlens-analytics` | SKILL.md | Installable agent skill: workflow, tool reference, examples |
 
 Key API routes: `POST /api/v1/ingest` (write key; browser *or* server-to-server —

@@ -10,9 +10,11 @@ import { Ask } from '@/pages/Ask'
 import { Alerts } from '@/pages/Alerts'
 import { McpUsage } from '@/pages/McpUsage'
 import { Settings } from '@/pages/Settings'
+import { Demo } from '@/pages/Demo'
 
 function Router() {
   const { project, page } = useApp()
+  if (page === 'demo') return <Demo />
   if (!project) return <Login />
   return (
     <Shell>

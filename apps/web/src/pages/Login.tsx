@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 export function Login() {
-  const { setProject } = useApp()
+  const { setProject, setPage } = useApp()
   const [key, setKey] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -57,6 +57,15 @@ export function Login() {
           <p className="mt-4 text-center text-xs text-slate-500">
             No project yet? Create one via the API — see the README quickstart.
           </p>
+          <div className="mt-2 text-center">
+            <button
+              type="button"
+              onClick={() => setPage('demo')}
+              className="text-xs font-medium text-slate-900 underline underline-offset-2 hover:text-slate-600"
+            >
+              or explore the Billwise live demo →
+            </button>
+          </div>
         </CardContent>
       </Card>
     </div>
