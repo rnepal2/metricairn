@@ -34,7 +34,7 @@ def ask(body: AskRequest, key: ApiKey = Depends(require_read_key), db: Session =
     db.add(Event(project_id=project_id, name="ask", props={"question": body.question, "planner": planner, "action": action}))
     db.commit()
 
-    return AskOut(answer=answer, data=data, chart=chart)
+    return AskOut(answer=answer, data=data, chart=chart, planner=planner)
 
 
 def _execute(db: Session, project_id: str, action: str, plan: dict, start, end):
