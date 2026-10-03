@@ -1,1 +1,15 @@
-{"description":"AgentLens tracking snippet — privacy-friendly, cookieless, <4KB","devDependencies":{"tsup":"^8.3.0","typescript":"^5.6.0"},"main":"./dist/agentlens.js","name":"@agentlens/tracker","scripts":{"build":"tsup src/tracker.ts --format iife --global-name agentlens --minify --out-dir dist --out-extension '.js'","dev":"tsup src/tracker.ts --format iife --global-name agentlens --watch --out-dir dist --out-extension '.js'"},"type":"module","version":"0.1.0"}
+{
+  "description": "AgentLens tracking snippet \u2014 privacy-friendly, cookieless, <4KB",
+  "devDependencies": {
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.0"
+  },
+  "main": "./dist/agentlens.js",
+  "name": "@agentlens/tracker",
+  "scripts": {
+    "build": "tsup src/tracker.ts --format iife --global-name agentlens --minify --out-dir dist && mv dist/tracker.global.js dist/agentlens.js",
+    "dev": "tsup src/tracker.ts --format iife --global-name agentlens --watch --out-dir dist --outExtension '.js'"
+  },
+  "type": "module",
+  "version": "0.1.0"
+}

@@ -17,7 +17,7 @@ class AgentLensClient:
         self.api_url = api_url.rstrip("/")
         self.read_key = read_key
         self.write_key = write_key
-        self._http = httpx.Client(timeout=30)
+        self._http = httpx.Client(timeout=30, trust_env=False)  # bypass env proxies for localhost API
 
     # -- read helpers -----------------------------------------------------
     def _get(self, path: str, params: dict | None = None) -> dict | list:

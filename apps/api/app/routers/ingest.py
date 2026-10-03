@@ -35,7 +35,7 @@ def ingest(
                 session_id=e.session_id[:64],
                 visitor_id=e.visitor_id[:64],
                 name=e.name[:200],
-                path=(e.url.split("?")[0] if "://" in e.url else e.url)[:1000] or "/",
+                path=_path_of(e.url),
                 url=e.url[:2000],
                 referrer=e.referrer[:2000],
                 utm_source=utm.get("utm_source", "")[:300],
@@ -54,6 +54,16 @@ def ingest(
         accepted += 1
     db.commit()
     return IngestResult(accepted=accepted, rejected=len(body.events) - accepted)
+
+
+def _path_of(url: str) -> str:
+    """Extract just the path (/pricing) from a full URL."""
+    try:
+        from urllib.parse import urlparse
+
+        return (urlparse(url).path or "/")[:1000]
+    except Exception:
+        return "/"
 
 
 def _utm_from_url(url: str) -> dict:

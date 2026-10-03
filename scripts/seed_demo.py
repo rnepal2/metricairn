@@ -45,11 +45,16 @@ def pick(weighted):
 
 
 def main() -> None:
-    http = httpx.Client(timeout=60)
+    http = httpx.Client(timeout=60, trust_env=False)  # bypass sandbox egress proxy for localhost
     print(f"→ creating project at {API}")
     p = http.post(f"{API}/api/v1/projects", json={"name": "Acme SaaS", "domain": "acme.test"}).json()
     project_id, write_key, read_key = p["id"], p["write_key"], p["read_key"]
     headers = {"X-Write-Key": write_key}
+
+    def flush(events: list[dict]) -> None:
+        for i in range(0, len(events), 400):  # API caps batches at 500
+            r = http.post(f"{API}/api/v1/ingest", json={"events": events[i : i + 400]}, headers=headers)
+            r.raise_for_status()
 
     now = datetime.now(timezone.utc)
     batch: list[dict] = []
@@ -100,12 +105,11 @@ def main() -> None:
                               "at": (base_ts + timedelta(minutes=1)).isoformat()})
 
         if len(batch) >= 400:
-            r = http.post(f"{API}/api/v1/ingest", json={"events": batch}, headers=headers)
-            r.raise_for_status()
+            flush(batch)
             batch = []
 
     if batch:
-        http.post(f"{API}/api/v1/ingest", json={"events": batch}, headers=headers).raise_for_status()
+        flush(batch)
 
     # Funnel + timeline note (read key)
     rheaders = {"X-Read-Key": read_key}

@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "AgentLens MCP server — let your AI agent query your product analytics"
 requires-python = ">=3.11"
 dependencies = [
-    "mcp>=1.9",
+    "mcp>=1.9,<2",
     "httpx>=0.27",
 ]
 

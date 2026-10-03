@@ -29,6 +29,9 @@ python scripts/seed_demo.py
 cd apps/web && npm install && npm run dev
 #    → http://localhost:5173 — paste the read key
 
+# (Optional) rebuild the tracker snippet served at /static/agentlens.js:
+cd packages/tracker && npm install && npm run build
+
 # 4. Ask your agent (optional)
 cd apps/mcp-server && pip install -e .
 export AGENTLENS_API_URL=http://localhost:8000 AGENTLENS_READ_KEY=alr_…
