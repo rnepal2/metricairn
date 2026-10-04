@@ -20,7 +20,7 @@ async def lifespan(app: FastAPI):
     scheduler = None
     # PYTEST_CURRENT_TEST is set by pytest automatically — never spawn
     # background threads inside the test suite.
-    if settings.alerts_scheduler_enabled and not os.environ.get("PYTEST_CURRENT_TEST"):
+    if settings.scheduler_enabled and not os.environ.get("PYTEST_CURRENT_TEST"):
         from apscheduler.schedulers.background import BackgroundScheduler
 
         from app.services.alerting import check_all_projects
@@ -30,7 +30,7 @@ async def lifespan(app: FastAPI):
         scheduler.add_job(
             check_all_projects,
             "interval",
-            minutes=settings.alerts_check_minutes,
+            minutes=settings.scheduler_interval_minutes,
             id="alert_check",
             max_instances=1,
             coalesce=True,
@@ -38,7 +38,7 @@ async def lifespan(app: FastAPI):
         scheduler.add_job(
             check_digests,
             "interval",
-            minutes=settings.alerts_check_minutes,
+            minutes=settings.scheduler_interval_minutes,
             id="digest_check",
             max_instances=1,
             coalesce=True,

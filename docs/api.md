@@ -25,6 +25,10 @@ query strings; the JS tracker persists landing UTMs for the whole session, so
 conversions attribute back to the campaign even when the checkout URL is clean.
 server-side. Works browser-to-server *and* server-to-server (ad-blocker-proof).
 
+`GET /api/v1/ingest/ping` (no auth) — reachability check for first-party proxy
+setups: `curl https://your-domain/al/ingest/ping` should return `{"ok":true}`.
+See `docs/first-party-proxy.md`.
+
 ## Query (read key)
 
 | Method | Path | Description |
@@ -59,7 +63,7 @@ All range queries accept `date_from` / `date_to` (ISO 8601, default last 30 days
 
 Anomaly detection is only useful if someone sees it. Channels get a message
 when a fresh anomaly matches a rule; the in-process scheduler runs the check
-every `ALERTS_CHECK_MINUTES` (default 30). With no custom rules, a built-in
+every `SCHEDULER_INTERVAL_MINUTES` (default 30). With no custom rules, a built-in
 default applies: any metric/direction, |z| ≥ 3, 24h cooldown. Cooldowns are
 tracked per (channel, anomaly), and every decision is logged.
 
@@ -78,7 +82,7 @@ tracked per (channel, anomaly), and every decision is logged.
 Email delivery uses Resend (`RESEND_API_KEY`, from `ALERTS_FROM_EMAIL`).
 Without it, email attempts are logged as failed with `skipped: RESEND_API_KEY
 not configured` — Slack needs no API key. For multi-worker deployments set
-`ALERTS_SCHEDULER_ENABLED=false` on all but one instance.
+`SCHEDULER_ENABLED=false` on all but one instance.
 
 ## Weekly digest
 

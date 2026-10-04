@@ -21,8 +21,8 @@ class Settings(BaseSettings):
     alerts_from_email: str = "AgentLens <alerts@agentlens.dev>"
     # In-process scheduler runs the alert check every N minutes. Disable when
     # running multiple API workers (run one scheduler instead).
-    alerts_scheduler_enabled: bool = True
-    alerts_check_minutes: int = 30
+    scheduler_enabled: bool = True
+    scheduler_interval_minutes: int = 30
 
 
 @lru_cache

@@ -5,14 +5,16 @@ Ordered by revenue leverage for a solo developer. v1 is the demo-ready core.
 ## v1.1 — Conversion essentials
 - [ ] Goals (define once: "signup completed" — reused across dashboard, funnels, ask)
 - [ ] UTM/campaign comparison view ("spend vs revenue" table)
-- [ ] Weekly email digest (top movers + anomalies)
+- [x] Weekly email digest (top movers + anomalies) — delivered to alert channels
+- [x] Segment-aware funnels (`?segment_by=device`, dashboard comparison, NL "which device converts best")
+- [x] First-party tracker proxy (docs + `/api/v1/ingest/ping` verification)
 - [ ] CSV export on every table
 
 ## v1.2 — Make the agent smarter
 - [ ] `compare` MCP tool (period-over-period with significance note)
 - [ ] Saved questions: pin ask results to the dashboard
-- [ ] Anomaly explanations ("revenue dipped because Google traffic fell 40%") — correlate breakdowns automatically
-- [ ] Slack webhook on anomalies
+- [x] Anomaly explanations ("revenue dipped because Google traffic fell 40%") — explain action + agent-written timeline notes
+- [x] Slack webhook on anomalies — alert channels (Slack + email) with rules, cooldowns, delivery log
 
 ## v1.3 — Scale the engine
 - [ ] Hourly/daily materialized rollups (same service interface; SQLite→Postgres path already abstracted)
