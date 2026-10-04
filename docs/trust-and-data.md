@@ -50,7 +50,7 @@ requests.post("https://YOUR-AGENTLENS/api/v1/ingest/events",
           "props": {"plan": "pro", "billing": "monthly"}})
 ```
 
-Prefer zero code? Enable the optional Stripe webhook receiver (`Settings → Integrations`):
+Prefer zero code? Enable the optional Stripe webhook receiver (`Settings → Installation → Server events`):
 `checkout.session.completed` and `invoice.paid` become `revenue` events automatically.
 It's off by default — the push model means you hold the tap.
 

@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     # running multiple API workers (run one scheduler instead).
     scheduler_enabled: bool = True
     scheduler_interval_minutes: int = 30
+    # Optional Stripe webhook receiver: when set, POST /api/v1/integrations/stripe/webhook
+    # verifies Stripe signatures and turns checkout.session.completed / invoice.paid
+    # into `revenue` events. Off by default — the push model means the customer
+    # holds the tap.
+    stripe_webhook_secret: str = ""
 
 
 @lru_cache

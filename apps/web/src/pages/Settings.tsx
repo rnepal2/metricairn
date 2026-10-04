@@ -89,6 +89,7 @@ export function Settings() {
             <TabsList>
               <TabsTrigger value="snippet">HTML snippet</TabsTrigger>
               <TabsTrigger value="npm">npm package</TabsTrigger>
+              <TabsTrigger value="server">Server events</TabsTrigger>
               <TabsTrigger value="proxy">First-party proxy</TabsTrigger>
             </TabsList>
             <TabsContent value="snippet">
@@ -96,6 +97,27 @@ export function Settings() {
             </TabsContent>
             <TabsContent value="npm">
               <CodeBlock label="Install the tracker package" code={`npm install @agentlens/tracker\n\nimport { agentlens, configure } from '@agentlens/tracker';\nconfigure({ api: '${apiBase}/api/v1/ingest', key: 'alw_YOUR_WRITE_KEY' });\nagentlens.event('signup');`} />
+            </TabsContent>
+            <TabsContent value="server">
+              <div className="space-y-3">
+                <p className="text-xs text-slate-600">
+                  Every revenue answer — anomaly alerts, attribution, the Monday digest — depends on
+                  your app firing <code className="font-mono">revenue</code> events. Two lines in your
+                  checkout success handler:
+                </p>
+                <CodeBlock label="Python" code={`import requests\nrequests.post("${apiBase}/api/v1/ingest/events",\n    headers={"X-Write-Key": "alw_YOUR_WRITE_KEY"},\n    json={"name": "revenue", "revenue_amount": 49.00,\n          "props": {"plan": "pro", "billing": "monthly"}})`} />
+                <CodeBlock label="Node" code={`await fetch("${apiBase}/api/v1/ingest/events", {\n  method: "POST",\n  headers: { "Content-Type": "application/json", "X-Write-Key": "alw_YOUR_WRITE_KEY" },\n  body: JSON.stringify({ name: "revenue", revenue_amount: 49.00,\n    props: { plan: "pro", billing: "monthly" } }),\n});`} />
+                <div className="rounded-lg border border-slate-200 p-3">
+                  <p className="text-xs font-medium text-slate-700">Zero-code option: Stripe webhook (opt-in)</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Point a Stripe webhook at <code className="rounded bg-slate-100 px-1 font-mono">{apiBase}/api/v1/integrations/stripe/webhook?key=alw_YOUR_WRITE_KEY</code> with
+                    events <code className="font-mono">checkout.session.completed</code> and <code className="font-mono">invoice.paid</code> —
+                    they become <code className="font-mono">revenue</code> events automatically (signature-verified,
+                    idempotent, no customer PII stored). Requires <code className="font-mono">STRIPE_WEBHOOK_SECRET</code> set
+                    on the API server. Off by default — you hold the tap.
+                  </p>
+                </div>
+              </div>
             </TabsContent>
             <TabsContent value="proxy">
               <CodeBlock label="Snippet (first-party paths)" code={`<script defer src="https://YOUR-DOMAIN/al/script.js"\n  data-api="https://YOUR-DOMAIN/al/ingest"\n  data-key="alw_YOUR_WRITE_KEY"></script>`} />

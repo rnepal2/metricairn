@@ -113,3 +113,9 @@ digest settings). A read key can never delete data.
 | GET | `/api/v1/projects/{id}/data/health` | read | Integration health checklist: `{checks: [{key, label, status, detail}], missing}` — is the instrumentation flowing? |
 
 Full trust story: `docs/trust-and-data.md`.
+
+## Integrations
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/v1/integrations/stripe/webhook?key=alw_…` | write (query) | Opt-in: Stripe-verified `checkout.session.completed` / `invoice.paid` → `revenue` events. Requires `STRIPE_WEBHOOK_SECRET`; 503 when unset. Idempotent on Stripe event id; no PII stored. |
