@@ -30,12 +30,18 @@ interface AppState {
 const Ctx = createContext<AppState | null>(null)
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [page, updatePage] = useState<PageKey>('overview')
+  const [page, updatePage] = useState<PageKey>(() =>
+    new URLSearchParams(window.location.search).get('demo') === 'billwise' ? 'demo' : 'overview',
+  )
   const [days, setDays] = useState(30)
   const [project, setProject] = useState<AppState['project']>(null)
   const [revision, setRevision] = useState(0)
   const setPage = (next: PageKey) => {
     updatePage(next)
+    const url = new URL(window.location.href)
+    if (next === 'demo') url.searchParams.set('demo', 'billwise')
+    else url.searchParams.delete('demo')
+    window.history.replaceState(null, '', url)
     setRevision((value) => value + 1)
   }
   const refresh = () => setRevision((value) => value + 1)

@@ -34,6 +34,10 @@ Track a meaningful action with `window.metricairn.event('signup')`, then define 
 - A small browser tracker with SPA navigation, bounded retries, deduplication, query cleanup, and DNT/GPC controls.
 - Scoped keys, rotation, project-data deletion, optional alerts and digests. Existing recorded-revenue support remains optional; payment and billing expansion is deferred.
 
+## Example: Maya at Billwise
+
+Maya Chen, the fictional solo founder of an invoicing app, investigates a traffic change, checks signup conversion, and reviews returning visitors. The guided demo computes results from 60 days of simulated events. [Walkthrough and demo setup](docs/use-cases/billwise.md).
+
 ## Connect an agent
 
 After `make setup`, configure your MCP client:

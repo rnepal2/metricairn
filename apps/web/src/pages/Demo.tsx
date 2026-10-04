@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Search, ArrowRight } from 'lucide-react'
 import { BASE, api, setReadKey, type Point, type FunnelReport } from '@/lib/api'
 import type { InvestigationReport } from '@/lib/exploration'
-import { useApp } from '@/lib/store'
+import { useApp, type PageKey } from '@/lib/store'
 import { useFetch } from '@/lib/useFetch'
 import { DEMO_READ_KEY } from '@/lib/demo'
 import { Button } from '@/components/ui/button'
@@ -48,14 +48,14 @@ export function Demo() {
       : null
     return { investigation, traffic, funnel }
   }, [])
-  async function open() {
+  async function open(target: PageKey = 'investigations') {
     setEntering(true)
     setError('')
     try {
       const project = await api.me(DEMO_READ_KEY)
       setReadKey(DEMO_READ_KEY)
       setProject(project)
-      setPage('investigations')
+      setPage(target)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Demo unavailable')
     } finally {
@@ -78,16 +78,21 @@ export function Demo() {
       <main className="mx-auto max-w-5xl space-y-8 p-6 py-12">
         <div className="space-y-4">
           <p className="text-xs font-semibold uppercase tracking-widest text-teal-700">
-            Billwise · fictional invoicing app
+            Maya Chen · Billwise · fictional founder scenario
           </p>
           <h1 className="max-w-3xl text-4xl font-bold leading-tight">
-            From a metric change to evidence you can act on.
+            How Maya investigates growth at Billwise.
           </h1>
           <p className="max-w-2xl text-lg text-slate-600">
-            See what changed, where the change is concentrated, and what to check next. Dashboard
-            and agent tools use the same analytical definitions. No AI key required.
+            Maya Chen runs Billwise, a one-person invoicing app for freelancers. On Monday morning,
+            she wants to know what changed in traffic, whether visitors are signing up, and where to
+            look next. Follow the evidence she can inspect from her dashboard or AI agent.
           </p>
-          <Button onClick={open} disabled={entering}>
+          <p className="max-w-2xl text-sm text-slate-500">
+            Maya and Billwise are fictional. The walkthrough uses 60 days of simulated events;
+            displayed results are calculated by the API. Core analytics needs no AI key.
+          </p>
+          <Button onClick={() => void open()} disabled={entering}>
             {entering ? 'Connecting…' : 'Explore dashboard'} <ArrowRight />
           </Button>
           <FetchError error={error} />
@@ -116,6 +121,10 @@ export function Demo() {
                   Visitor trend · 60 days. Daily distinct visitors should not be summed into period
                   uniques.
                 </p>
+                <p className="border-l-2 border-teal-200 pl-3 text-sm text-slate-600">
+                  Maya’s first question: “What changed in pageviews over the last week, and is
+                  collection still working?”
+                </p>
               </CardContent>
             </Card>
             <div className="grid gap-4 lg:grid-cols-2">
@@ -137,6 +146,10 @@ export function Demo() {
                     Event-stamped source segments. Their changes and the remaining tail reconcile to
                     the total; they do not prove cause.
                   </p>
+                  <p className="text-sm text-slate-600">
+                    Maya uses the largest changed sources to choose what to investigate, then checks
+                    campaign-tagged signup events before deciding what content to write next.
+                  </p>
                 </CardContent>
               </Card>
               <Card>
@@ -156,6 +169,26 @@ export function Demo() {
                     Ordered, visitor-based funnel · 60 days. Goals and retention are also available
                     in the dashboard.
                   </p>
+                  <p className="text-sm text-slate-600">
+                    She checks the signup path, measures the Account signup goal, and inspects
+                    returning visitor cohorts rather than judging growth from traffic alone.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      disabled={entering}
+                      onClick={() => void open('goals')}
+                    >
+                      Inspect signup goal
+                    </Button>
+                    <Button
+                      variant="outline"
+                      disabled={entering}
+                      onClick={() => void open('retention')}
+                    >
+                      Inspect retention
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -168,16 +201,17 @@ export function Demo() {
                   <p key={check}>{check}</p>
                 ))}
                 <p className="text-xs text-slate-500">
-                  Export the evidence or save it with a private management key. Review notes are
-                  stored separately from the immutable report.
+                  Maya can export the evidence, or save it with a private management key and record
+                  her next check. Review notes are stored separately from the immutable report.
                 </p>
               </CardContent>
             </Card>
           </>
         )}
         <p className="rounded-lg border bg-white p-4 text-sm text-slate-600">
-          Billwise is fictional. This demonstrates the workflow, not verified customer savings or
-          causal impact. All displayed results are computed from seeded, simulated events.
+          Maya Chen and Billwise are fictional. This demonstrates the workflow, not verified
+          customer savings or causal impact. All displayed results are computed from seeded,
+          simulated events.
         </p>
       </main>
     </div>
