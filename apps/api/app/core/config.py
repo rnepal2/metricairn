@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     # into `revenue` events. Off by default — the push model means the customer
     # holds the tap.
     stripe_webhook_secret: str = ""
+    # Agentic SQL analytics: the LLM writes SQL against the fixed event schema.
+    # Requires an LLM key (Anthropic/OpenAI); without one, ask stays deterministic.
+    agentic_sql_enabled: bool = True
+    agentic_sql_timeout_s: int = 15
+    agentic_sql_row_cap: int = 200
 
 
 @lru_cache
