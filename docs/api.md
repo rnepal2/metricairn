@@ -57,7 +57,7 @@ All range queries accept `date_from` / `date_to` (ISO 8601, default last 30 days
 
 `POST /api/v1/ask` (read key): `{"question": "..."}` → `{answer, data, chart?, planner}`.
 `chart` is `{type: timeseries|bar, x_key, y_key, title}` when a visualization fits.
-`planner` is `heuristic` (intent classification is heuristic-only; the LLM now writes SQL on the agentic path instead). Every question is logged as an `ask` event.
+`planner` is `heuristic` (deterministic fast path) or `agentic_sql` (the LLM wrote SQL against the fixed event schema — validated before trusted). Every question is logged as an `ask` event.
 
 ## Alert delivery
 

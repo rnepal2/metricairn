@@ -1,44 +1,86 @@
 """Natural-language analytics: POST /api/v1/ask {question}.
 
-Plans the question (LLM when configured, heuristic fallback), executes it against
-the analytics service, and returns a human/agent-readable answer plus an optional
-chart spec the dashboard renders. Every question is logged as an `ask` event so
-the product observes its own agent usage (see /query/mcp-usage).
+Routing: the heuristic planner classifies the question with a confidence
+score. High confidence → the deterministic fast path (ten hand-written
+actions: instant, free, exact). Low confidence → the agentic SQL path (the
+LLM writes SQL against the fixed event schema, validated before trusted).
+When the agentic path fails validation, the answer falls back to the
+deterministic best-effort with an honest note — never a fabricated answer.
+
+Every question is logged as an `ask` event so the product observes its own
+agent usage (see /query/mcp-usage).
 """
 
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.security import require_read_key
 from app.models import ApiKey, Event, Note
 from app.schemas import AskOut, AskRequest
-from app.services import analytics, anomaly, coverage, nl
+from app.services import analytics, anomaly, coverage, nl, sql_agent
+from app.services import llm as llm_service
 from app.services.analytics import parse_range
 
 router = APIRouter(prefix="/api/v1/ask", tags=["ask"])
 
+# Heuristic confidence at or above this → deterministic fast path.
+_DETERMINISTIC_THRESHOLD = 0.7
+
 
 @router.post("", response_model=AskOut)
-def ask(body: AskRequest, key: ApiKey = Depends(require_read_key), db: Session = Depends(get_db)):
+def ask(body: AskRequest, request: Request, key: ApiKey = Depends(require_read_key),
+        db: Session = Depends(get_db)):
     plan, planner, confidence = nl.plan(body.question)
     project_id = key.project_id
     date_from = plan.get("date_from") or body.date_from
     date_to = plan.get("date_to") or body.date_to
     start, end = parse_range(date_from, date_to)
-
     action = plan.get("action", "overview")
+
+    settings = get_settings()
+    # Tests (and future BYO-key flows) inject a scripted LLM via app.state.
+    llm_fn = getattr(request.app.state, "llm_fn", None)
+    agentic_available = settings.agentic_sql_enabled and (llm_service.llm_available() or llm_fn is not None)
+
+    agentic_result = None
+    if confidence < _DETERMINISTIC_THRESHOLD and agentic_available:
+        agentic_result = sql_agent.answer_agentic(
+            db, project_id, body.question, start, end, llm_fn=llm_fn)
+        if agentic_result["ok"]:
+            _log_ask(db, project_id, body.question, "agentic_sql", "agentic_sql")
+            notes = agentic_result["validation_notes"] + coverage.coverage_notes(
+                db, project_id, action, start, end)
+            return AskOut(
+                answer=agentic_result["answer"],
+                data=agentic_result["rows"],
+                chart=None,
+                planner="agentic_sql",
+                coverage_notes=notes,
+                based_on=coverage.based_on(db, project_id, start, end),
+            )
+
+    # Deterministic fast path — or honest fallback when the agentic path failed.
     answer, data, chart = _execute(db, project_id, action, plan, start, end)
     notes = coverage.coverage_notes(db, project_id, action, start, end)
+    if agentic_result is not None and not agentic_result["ok"]:
+        notes = [f"Couldn't answer this precisely ({agentic_result['reason']}). "
+                 "Here's the overall picture instead."] + notes
     provenance = coverage.based_on(db, project_id, start, end)
 
-    # Observe our own agent usage (direction-2 analytics).
-    db.add(Event(project_id=project_id, name="ask", props={"question": body.question, "planner": planner, "action": action}))
-    db.commit()
+    _log_ask(db, project_id, body.question, planner, action)
+    return AskOut(answer=answer, data=data, chart=chart, planner=planner,
+                  coverage_notes=notes, based_on=provenance)
 
-    return AskOut(answer=answer, data=data, chart=chart, planner=planner, coverage_notes=notes, based_on=provenance)
+
+def _log_ask(db: Session, project_id: str, question: str, planner: str, action: str) -> None:
+    # Observe our own agent usage (direction-2 analytics).
+    db.add(Event(project_id=project_id, name="ask",
+                 props={"question": question, "planner": planner, "action": action}))
+    db.commit()
 
 
 def _execute(db: Session, project_id: str, action: str, plan: dict, start, end):

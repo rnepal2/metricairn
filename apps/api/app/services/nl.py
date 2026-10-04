@@ -77,8 +77,19 @@ def heuristic_plan(question: str) -> dict:
             return base("explain")
         return base("anomalies")
     # Comparison / multi-period questions need composed queries the ten fixed
-    # actions can't express — route them to the agentic SQL path.
-    if re.search(r"\bcompare\b|\bvs\.?\b|\bversus\b|difference between", q):
+    # actions can't express — route them to the agentic SQL path. Each pattern
+    # below is a *class* of compositional question (comparisons, moving
+    # averages, per-unit ratios, percentages, time-part groupings, negations,
+    # destructive verbs), not a per-question hack: the heuristic's job is now
+    # "answer exactly what I can; punt the rest to the agent".
+    _LONGTAIL_HINTS = [
+        r"\bcompare\b", r"\bvs\.?\b", r"\bversus\b", r"difference between",
+        r"\bmoving average\b", r"\bper\b.{0,20}\b(visitor|user|customer|session)\b",
+        r"\bpercent\b", r"\bpercentage\b", r"\bratio\b",
+        r"\bday of week\b", r"\bhour of day\b", r"\bnever\b",
+        r"\bdelete\b", r"\bdrop\b",
+    ]
+    if any(re.search(p, q) for p in _LONGTAIL_HINTS):
         return base("overview", conf=0.25)
     if any(w in q for w in ("funnel", "leak", "drop-off", "dropoff", "convert")):
         return base("funnels", segment_by=_funnel_segment(q))
@@ -98,6 +109,8 @@ def heuristic_plan(question: str) -> dict:
         return base("breakdown", dimension="utm_source")
     if any(w in q for w in ("device", "mobile vs", "desktop")):
         return base("breakdown", dimension="device")
+    if "browser" in q:
+        return base("breakdown", dimension="browser")
     if any(w in q for w in ("countr", "geograph", "where.*visitors")):
         return base("breakdown", dimension="country")
     if any(w in q for w in ("event", "clicked", "button", "signup", "sign up")):

@@ -34,7 +34,7 @@ Last-30-minutes activity: `{visitors, pageviews, events, top_pages}`.
 ## Natural language
 
 ### `ask(question, days=30)`
-Classifies the question with the heuristic planner (low-confidence questions route to the agentic SQL path when an LLM key is configured) and returns `{answer, data, chart, planner, coverage_notes, based_on}` — `coverage_notes` names what the answer couldn't see (e.g. no revenue events in range); `based_on` is the provenance footer (`{events, event_names, date_range}`). Log of asked questions feeds `mcp_usage`.
+Classifies the question with the heuristic planner (high confidence → one of the ten deterministic analyses; low confidence → the agentic SQL path when an LLM key is configured, where the model writes SQL against the fixed event schema and every statement is validated before execution) and returns `{answer, data, chart, planner, coverage_notes, based_on}` — `planner` is `heuristic` or `agentic_sql`; `coverage_notes` names what the answer couldn't see (e.g. no revenue events in range); `based_on` is the provenance footer (`{events, event_names, date_range}`). Log of asked questions feeds `mcp_usage`.
 
 ## Meta
 
