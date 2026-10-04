@@ -14,6 +14,16 @@ export function clearReadKey() {
   localStorage.removeItem('agentlens_read_key');
 }
 
+/** Write key is optional in the dashboard — needed only for managing alert
+ *  channels/rules. Stored alongside the read key, never sent otherwise. */
+export function getWriteKey(): string | null {
+  return localStorage.getItem('agentlens_write_key');
+}
+
+export function setWriteKey(key: string) {
+  localStorage.setItem('agentlens_write_key', key);
+}
+
 async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
   const key = getReadKey();
   const res = await fetch(`${BASE}${path}`, {
@@ -28,6 +38,20 @@ async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/** Same as req() but authenticates with the write key (for alert management). */
+async function reqWrite<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const key = getWriteKey();
+  const res = await fetch(`${BASE}${path}`, {
+    ...init,
+    headers: { 'Content-Type': 'application/json', ...(key ? { 'X-Write-Key': key } : {}), ...(init.headers || {}) },
+  });
+  if (res.status === 401 || res.status === 403) {
+    throw new Error('Invalid write key — check it in Settings.');
+  }
+  if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
+  return res.json() as Promise<T>;
+}
+
 export interface Overview {
   visitors: number; pageviews: number; sessions: number; bounce_rate: number;
   avg_session_seconds: number; events: number; revenue: number; revenue_currency: string;
@@ -36,6 +60,9 @@ export interface Point { t: string; value: number }
 export interface BreakdownRow { value: string; visitors: number; pageviews: number; revenue: number }
 export interface Anomaly { date: string; metric: string; value: number; expected: number; z_score: number; direction: string }
 export interface AskResult { answer: string; data: Record<string, unknown>[]; chart: { type: string; x_key: string; y_key: string; title: string } | null }
+export interface AlertChannel { id: string; kind: string; target: string; enabled: boolean; created_at: string }
+export interface AlertRule { id: string; name: string; metric: string; direction: string; min_z: number; cooldown_hours: number; enabled: boolean; created_at: string }
+export interface AlertDelivery { id: string; channel_id: string; rule_id: string; anomaly_key: string; status: string; detail: string; created_at: string }
 
 export const api = {
   me: () => req<{ project_id: string; name: string; domain: string }>('/api/v1/projects/me'),
@@ -58,4 +85,19 @@ export const api = {
   notes: (projectId: string) => req<{ id: string; text: string; at: string }[]>(`/api/v1/projects/${projectId}/notes`),
   addNote: (projectId: string, text: string) =>
     req(`/api/v1/projects/${projectId}/notes`, { method: 'POST', body: JSON.stringify({ text }) }),
+  alertChannels: () => req<AlertChannel[]>('/api/v1/alerts/channels'),
+  addAlertChannel: (kind: string, target: string) =>
+    reqWrite<AlertChannel>('/api/v1/alerts/channels', { method: 'POST', body: JSON.stringify({ kind, target }) }),
+  deleteAlertChannel: (id: string) =>
+    reqWrite(`/api/v1/alerts/channels/${id}`, { method: 'DELETE' }),
+  testAlertChannel: (id: string) =>
+    reqWrite<{ ok: boolean; detail: string }>(`/api/v1/alerts/channels/${id}/test`, { method: 'POST' }),
+  alertRules: () => req<AlertRule[]>('/api/v1/alerts/rules'),
+  addAlertRule: (rule: { name: string; metric: string; direction: string; min_z: number; cooldown_hours: number }) =>
+    reqWrite<AlertRule>('/api/v1/alerts/rules', { method: 'POST', body: JSON.stringify(rule) }),
+  deleteAlertRule: (id: string) =>
+    reqWrite(`/api/v1/alerts/rules/${id}`, { method: 'DELETE' }),
+  alertDeliveries: () => req<AlertDelivery[]>('/api/v1/alerts/deliveries'),
+  runAlertCheck: () =>
+    reqWrite<{ sent: number; skipped: number; failed: number }>('/api/v1/alerts/check', { method: 'POST' }),
 };

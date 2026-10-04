@@ -54,3 +54,28 @@ All range queries accept `date_from` / `date_to` (ISO 8601, default last 30 days
 `POST /api/v1/ask` (read key): `{"question": "..."}` → `{answer, data, chart?, planner}`.
 `chart` is `{type: timeseries|bar, x_key, y_key, title}` when a visualization fits.
 `planner` is `heuristic` or `llm`. Every question is logged as an `ask` event.
+
+## Alert delivery
+
+Anomaly detection is only useful if someone sees it. Channels get a message
+when a fresh anomaly matches a rule; the in-process scheduler runs the check
+every `ALERTS_CHECK_MINUTES` (default 30). With no custom rules, a built-in
+default applies: any metric/direction, |z| ≥ 3, 24h cooldown. Cooldowns are
+tracked per (channel, anomaly), and every decision is logged.
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/v1/alerts/channels` | write | `{kind: email\|slack, target}` — address or `https://hooks.slack.com/…` webhook |
+| GET | `/api/v1/alerts/channels` | read | List (webhook URLs masked) |
+| DELETE | `/api/v1/alerts/channels/{id}` | write | Remove |
+| POST | `/api/v1/alerts/channels/{id}/test` | write | Send a test message |
+| POST | `/api/v1/alerts/rules` | write | `{name, metric, direction, min_z, cooldown_hours}` |
+| GET | `/api/v1/alerts/rules` | read | List |
+| DELETE | `/api/v1/alerts/rules/{id}` | write | Remove |
+| GET | `/api/v1/alerts/deliveries` | read | Delivery log: sent / failed / skipped |
+| POST | `/api/v1/alerts/check` | write | Run one check cycle now (same as the scheduler) |
+
+Email delivery uses Resend (`RESEND_API_KEY`, from `ALERTS_FROM_EMAIL`).
+Without it, email attempts are logged as failed with `skipped: RESEND_API_KEY
+not configured` — Slack needs no API key. For multi-worker deployments set
+`ALERTS_SCHEDULER_ENABLED=false` on all but one instance.

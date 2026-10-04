@@ -16,6 +16,13 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     ask_model: str = "claude-haiku-4-5"
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
+    # Alert delivery: email goes through Resend; Slack needs only a webhook URL.
+    resend_api_key: str = ""
+    alerts_from_email: str = "AgentLens <alerts@agentlens.dev>"
+    # In-process scheduler runs the alert check every N minutes. Disable when
+    # running multiple API workers (run one scheduler instead).
+    alerts_scheduler_enabled: bool = True
+    alerts_check_minutes: int = 30
 
 
 @lru_cache

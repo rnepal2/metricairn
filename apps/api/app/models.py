@@ -101,3 +101,51 @@ class Note(Base):
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
     text: Mapped[str] = mapped_column(Text, default="")
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class AlertChannel(Base):
+    """Where anomaly alerts go: email address or Slack webhook. Managed by the
+    founder with a write key; the scheduler delivers to every enabled channel."""
+
+    __tablename__ = "alert_channels"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(20))  # 'email' | 'slack'
+    target: Mapped[str] = mapped_column(String(500))  # address or webhook URL
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class AlertRule(Base):
+    """Which anomalies trigger a notification. If a project has channels but no
+    enabled rules, a built-in default (any metric/direction, |z| >= 3, 24h
+    cooldown) applies."""
+
+    __tablename__ = "alert_rules"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(200), default="")
+    metric: Mapped[str] = mapped_column(String(20), default="any")  # 'revenue'|'pageviews'|'any'
+    direction: Mapped[str] = mapped_column(String(20), default="any")  # 'dip'|'spike'|'any'
+    min_z: Mapped[float] = mapped_column(default=2.5)
+    cooldown_hours: Mapped[float] = mapped_column(default=24.0)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class AlertDelivery(Base):
+    """Log of every alert decision — sent, failed, or skipped. Doubles as the
+    cooldown ledger and the dashboard's delivery history."""
+
+    __tablename__ = "alert_deliveries"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    channel_id: Mapped[str] = mapped_column(String(32), default="")
+    rule_id: Mapped[str] = mapped_column(String(32), default="")
+    anomaly_key: Mapped[str] = mapped_column(String(200), index=True)  # metric:direction:date[:date_end]
+    status: Mapped[str] = mapped_column(String(20))  # 'sent'|'failed'|'skipped'
+    detail: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)

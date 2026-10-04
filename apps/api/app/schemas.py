@@ -121,3 +121,46 @@ class AskOut(BaseModel):
 class NoteCreate(BaseModel):
     text: str
     at: datetime | None = None
+
+
+# ---------- Alert delivery ----------
+class AlertChannelCreate(BaseModel):
+    kind: str = Field(pattern="^(email|slack)$")  # 'email' -> address, 'slack' -> webhook URL
+    target: str = Field(min_length=3, max_length=500)
+
+
+class AlertChannelOut(BaseModel):
+    id: str
+    kind: str
+    target: str
+    enabled: bool
+    created_at: datetime
+
+
+class AlertRuleCreate(BaseModel):
+    name: str = ""
+    metric: str = Field(default="any", pattern="^(revenue|pageviews|any)$")
+    direction: str = Field(default="any", pattern="^(dip|spike|any)$")
+    min_z: float = Field(default=2.5, ge=1.0, le=10.0)
+    cooldown_hours: float = Field(default=24.0, ge=1.0, le=720.0)
+
+
+class AlertRuleOut(BaseModel):
+    id: str
+    name: str
+    metric: str
+    direction: str
+    min_z: float
+    cooldown_hours: float
+    enabled: bool
+    created_at: datetime
+
+
+class AlertDeliveryOut(BaseModel):
+    id: str
+    channel_id: str
+    rule_id: str
+    anomaly_key: str
+    status: str
+    detail: str
+    created_at: datetime

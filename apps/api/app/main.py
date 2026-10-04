@@ -1,5 +1,6 @@
 """AgentLens API — privacy-friendly product analytics your AI agent can query."""
 
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -9,13 +10,34 @@ from fastapi.staticfiles import StaticFiles
 
 from app.core.config import get_settings
 from app.core.database import init_db
-from app.routers import ask, funnels, ingest, projects, query
+from app.routers import alerts, ask, funnels, ingest, projects, query
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    settings = get_settings()
+    scheduler = None
+    # PYTEST_CURRENT_TEST is set by pytest automatically — never spawn
+    # background threads inside the test suite.
+    if settings.alerts_scheduler_enabled and not os.environ.get("PYTEST_CURRENT_TEST"):
+        from apscheduler.schedulers.background import BackgroundScheduler
+
+        from app.services.alerting import check_all_projects
+
+        scheduler = BackgroundScheduler()
+        scheduler.add_job(
+            check_all_projects,
+            "interval",
+            minutes=settings.alerts_check_minutes,
+            id="alert_check",
+            max_instances=1,
+            coalesce=True,
+        )
+        scheduler.start()
     yield
+    if scheduler:
+        scheduler.shutdown(wait=False)
 
 
 def create_app() -> FastAPI:
@@ -28,7 +50,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    for r in (projects.router, ingest.router, query.router, funnels.router, ask.router):
+    for r in (projects.router, ingest.router, query.router, funnels.router, ask.router, alerts.router):
         app.include_router(r)
 
     # Serve the built tracker snippet so the Settings page snippet URL works out of the box.
