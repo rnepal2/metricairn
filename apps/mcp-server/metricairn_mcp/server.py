@@ -214,18 +214,32 @@ def list_goals() -> str:
 
 
 @mcp.tool(annotations={"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False})
-def goal_report(goal_id: str, days: int = 30) -> str:
-    """Period conversion: unique visitors with a pageview then this goal. Reports denominator, repeated occurrences and missing identity."""
+def goal_report(
+    goal_id: str, days: int = 30, date_from: str | None = None, date_to: str | None = None
+) -> str:
+    """Period conversion: unique visitors with a pageview then this goal. Reports denominator, repeated occurrences and missing identity.
+    Use date_from/date_to together for an exact window; otherwise days determines it."""
     c = client()
-    return json.dumps(timed_report(c, "goal_report", c.goal_report, goal_id, days), indent=2)
+    return json.dumps(
+        timed_report(c, "goal_report", c.goal_report, goal_id, days, date_from, date_to), indent=2
+    )
 
 
 @mcp.tool(annotations={"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False})
-def retention_report(days: int = 90, event_name: str | None = None) -> str:
+def retention_report(
+    days: int = 90,
+    event_name: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> str:
     """Weekly first-observed visitor cohorts, weeks 0..12. Incomplete cells are null; identities and acquisition history affect accuracy.
-    event_name optionally restricts returning activity, not the first-observed cohort definition."""
+    event_name optionally restricts returning activity, not the first-observed cohort definition.
+    Use date_from/date_to together for an exact window; otherwise days determines it."""
     c = client()
-    return json.dumps(timed_report(c, "retention_report", c.retention, days, event_name), indent=2)
+    return json.dumps(
+        timed_report(c, "retention_report", c.retention, days, event_name, date_from, date_to),
+        indent=2,
+    )
 
 
 @mcp.tool(annotations={"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False})

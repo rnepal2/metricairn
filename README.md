@@ -36,7 +36,7 @@ Track a meaningful action with `window.metricairn.event('signup')`, then define 
 
 ## Example: Maya at Billwise
 
-Maya Chen, the fictional solo founder of an invoicing app, investigates a traffic change, checks signup conversion, and reviews returning visitors. The guided demo computes results from 60 days of simulated events. [Walkthrough and demo setup](docs/use-cases/billwise.md).
+Maya Chen, the fictional solo founder of an invoicing app, investigates traffic, campaign signups, conversion, and returning visitors. The demo shows copyable MCP calls beside live results from simulated events; a companion script verifies them through an actual MCP session. [Walkthrough and demo setup](docs/use-cases/billwise.md).
 
 ## Connect an agent
 

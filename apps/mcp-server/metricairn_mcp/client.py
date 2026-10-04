@@ -36,14 +36,28 @@ class MetricairnClient:
         )  # bypass env proxies for localhost API
 
     # -- read helpers -----------------------------------------------------
+    @staticmethod
+    def _json(response: httpx.Response) -> dict | list:
+        response.raise_for_status()
+        content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
+        if content_type != "application/json" and not content_type.endswith("+json"):
+            raise ValueError(
+                "The API returned a non-JSON response. Check METRICAIRN_API_URL and the API/proxy configuration."
+            )
+        try:
+            return response.json()
+        except ValueError:
+            raise ValueError(
+                "The API returned invalid JSON. Check the API logs, then retry."
+            ) from None
+
     def _get(self, path: str, params: dict | None = None) -> dict | list:
         r = self._http.get(
             f"{self.api_url}{path}",
             params=params or {},
             headers={"X-Read-Key": self.read_key},
         )
-        r.raise_for_status()
-        return r.json()
+        return self._json(r)
 
     def _post(self, path: str, body: dict) -> dict | list:
         r = self._http.post(
@@ -51,8 +65,7 @@ class MetricairnClient:
             json=body,
             headers={"X-Read-Key": self.read_key},
         )
-        r.raise_for_status()
-        return r.json()
+        return self._json(r)
 
     def metrics_catalog(self):
         return self._get("/api/v1/query/metrics")
@@ -66,13 +79,21 @@ class MetricairnClient:
     def goals(self):
         return self._get("/api/v1/goals")
 
-    def goal_report(self, goal_id: str, days: int):
-        return self._get(f"/api/v1/goals/{goal_id}/report", _range(days))
+    def goal_report(
+        self, goal_id: str, days: int, date_from: str | None = None, date_to: str | None = None
+    ):
+        return self._get(f"/api/v1/goals/{goal_id}/report", _range(days, date_from, date_to))
 
-    def retention(self, days: int, event_name: str | None = None):
+    def retention(
+        self,
+        days: int,
+        event_name: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+    ):
         return self._get(
             "/api/v1/query/retention",
-            _range(days) | ({"event_name": event_name} if event_name else {}),
+            _range(days, date_from, date_to) | ({"event_name": event_name} if event_name else {}),
         )
 
     def investigations(self):
@@ -90,8 +111,7 @@ class MetricairnClient:
             json=body,
             headers={"X-Management-Key": self.management_key},
         )
-        response.raise_for_status()
-        return response.json()
+        return self._json(response)
 
     def save_investigation(self, title: str, plan: dict):
         return self._manage("POST", "/api/v1/investigations", {"title": title, "plan": plan})
@@ -170,8 +190,7 @@ class MetricairnClient:
             json={"text": text},
             headers={"X-Management-Key": self.management_key},
         )
-        r.raise_for_status()
-        return r.json()
+        return self._json(r)
 
     # -- direction-2: the server observes its own usage --------------------
     def report_tool_call(self, tool: str, duration_ms: float, success: bool) -> None:
@@ -201,9 +220,13 @@ class MetricairnClient:
             pass  # usage reporting must never break the tool call
 
 
-def _range(days: int) -> dict:
+def _range(days: int, date_from: str | None = None, date_to: str | None = None) -> dict:
     from datetime import datetime, timedelta, timezone
 
+    if bool(date_from) != bool(date_to):
+        raise ValueError("Provide both date_from and date_to, or neither")
+    if date_from:
+        return {"date_from": date_from, "date_to": date_to}
     if not 1 <= days <= 366:
         raise ValueError("days must be between 1 and 366")
     end = datetime.now(timezone.utc)

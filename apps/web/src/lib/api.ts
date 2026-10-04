@@ -46,9 +46,41 @@ export function setManagementKey(key: string) {
   sessionStorage.setItem('metricairn_management_key', key)
 }
 
+/** Never expose a raw JSON parser error or an HTML proxy response to the user. */
+export async function readJson<T>(response: Response): Promise<T> {
+  const type = response.headers.get('content-type')?.split(';')[0].trim().toLowerCase()
+  if (type !== 'application/json' && !type?.endsWith('+json')) {
+    throw new Error(
+      `The API returned ${type === 'text/html' ? 'HTML' : 'a non-JSON response'} (HTTP ${response.status}). Open the dashboard at http://localhost:8000 after starting make api, or check the API URL and proxy configuration.`,
+    )
+  }
+  let body
+  try {
+    body = await response.json()
+  } catch {
+    throw new Error('The API returned invalid JSON. Check the API logs, then retry.')
+  }
+  if (!response.ok) {
+    throw new Error(
+      typeof body?.detail === 'string'
+        ? body.detail
+        : `Request failed (HTTP ${response.status}). Check inputs and try again.`,
+    )
+  }
+  return body as T
+}
+
+export async function requestResponse(path: string, init: RequestInit = {}): Promise<Response> {
+  try {
+    return await fetch(`${BASE}${path}`, init)
+  } catch {
+    throw new Error('Cannot reach the API. Start make api and check the API URL, then retry.')
+  }
+}
+
 export async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
   const key = getReadKey()
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await requestResponse(path, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
@@ -59,19 +91,13 @@ export async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (res.status === 401 || res.status === 403) {
     throw new Error('Read access denied — check your project key.')
   }
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    const detail =
-      typeof body.detail === 'string' ? body.detail : 'Request failed. Check inputs and try again.'
-    throw new Error(detail)
-  }
-  return res.json() as Promise<T>
+  return readJson<T>(res)
 }
 
 /** Same as req() but authenticates with the private management key. */
 export async function reqManage<T>(path: string, init: RequestInit = {}): Promise<T> {
   const key = getManagementKey()
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await requestResponse(path, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
@@ -82,13 +108,7 @@ export async function reqManage<T>(path: string, init: RequestInit = {}): Promis
   if (res.status === 401 || res.status === 403) {
     throw new Error('Invalid management key — enter the private alm_ key in Settings.')
   }
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    const detail =
-      typeof body.detail === 'string' ? body.detail : 'Request failed. Check inputs and try again.'
-    throw new Error(detail)
-  }
-  return res.json() as Promise<T>
+  return readJson<T>(res)
 }
 
 export interface Comparison {

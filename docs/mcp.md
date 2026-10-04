@@ -27,7 +27,9 @@ Use the configuration in [README](../README.md), replacing the absolute Python p
 }
 ```
 
-`investigate_change` supports pageviews, custom events, and named event occurrences, with either `days` or both exact dates. It returns comparison, segment contributions, coverage, timeline notes, caveats, and next checks. Use `list_goals` before `goal_report`; use `list_investigations` before `get_investigation`.
+`investigate_change` supports pageviews, custom events, and named event occurrences, with either `days` or both exact dates. It returns comparison, segment contributions, coverage, timeline notes, caveats, and next checks. `goal_report` and `retention_report` also accept both `date_from` and `date_to` instead of a rolling `days` window. Use `list_goals` before `goal_report`; use `list_investigations` before `get_investigation`.
+
+[Billwise worked example](use-cases/billwise.md): browser previews with copyable calls and a script that executes them through a real MCP session, without an AI provider.
 
 ## Optional writes and telemetry
 

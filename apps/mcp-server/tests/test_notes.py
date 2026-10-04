@@ -33,6 +33,8 @@ class FakeHTTP:
 
 
 class FakeResp:
+    headers = {"content-type": "application/json"}
+
     def __init__(self, payload):
         self._payload = payload
 

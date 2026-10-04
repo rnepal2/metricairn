@@ -1,17 +1,17 @@
 # Maya Chen at Billwise
 
-**Fictional worked example.** Maya is the solo founder of Billwise, an invoicing app for freelancers. The demo uses simulated events; its displayed counts and charts are calculated by Metricairn’s API. No customer endorsement, measured time saving, or financial outcome is claimed.
+**Fictional MCP worked example.** Maya is the solo founder of Billwise, an invoicing app for freelancers. The browser shows copyable tool arguments, live API results, metric definitions, and full JSON from simulated events. It previews the same API used by MCP; it does not run an agent or MCP session. No customer endorsement or measured business outcome is claimed.
 
 ![Maya’s Billwise walkthrough with API-computed simulated data](../assets/billwise-demo.png)
 
 ## Monday’s questions
 
-| Question | Workflow | Decision supported |
+| Question | MCP calls | What you get |
 |---|---|---|
-| What changed this week? | Compare pageviews with the preceding seven days; inspect source/device/browser/path contributions and collection coverage | Choose a segment and verify collection before interpreting the change |
-| Which content deserves attention? | Query `signup` occurrences by `utm_campaign`; inspect missing tags and repeat events | Identify campaigns to examine; tagged signups are an association, not causal ROI |
-| Are visitors converting and returning? | Inspect the ordered funnel, Account signup goal, and weekly retention | Separate traffic growth from conversion and return activity |
-| What should I check next? | Export the report, or save immutable evidence and a review note with management access | Keep the observation, hypothesis, next check, and later decision together |
+| What changed this week? | `investigate_change` | Equal-duration comparison, segment contributions, collection coverage, caveats, next checks |
+| Which campaigns have signup activity? | `run_query` with `event_count`, `signup`, and `utm_campaign` | Occurrence counts, including repeats and missing tags; association, not causal ROI |
+| Are visitors converting? | `list_goals` → `goal_report` using the returned signup goal ID | Distinct conversions, pageview denominator, repeat occurrences, missing identity |
+| Do visitors return? | `retention_report` | First-observed weekly cohorts; incomplete weeks stay blank |
 
 Example agent request: “Investigate Billwise’s pageview change over the last seven days. Check collection coverage, show the largest changed segments, and give me the next checks. Then report signup conversion and returning visitor cohorts.” The MCP server uses the same API definitions as the dashboard.
 
@@ -26,9 +26,19 @@ make api                         # leave running in terminal 1
 uv run python scripts/seed_billwise.py  # terminal 2, same repository root/database
 ```
 
-Open **http://localhost:8000/?demo=billwise**, or select **“Explore the simulated Billwise demo”** on the login screen. The story opens without entering a key; “Explore dashboard” connects to the seeded project with read access. The story also links directly to signup goals and retention. Seeding replaces only the existing public demo project. Never use its shared read key for real customer data.
+Open **http://localhost:8000/?demo=billwise**, or select **“Explore the simulated Billwise demo”** on the login screen. Select an example to see its inputs and results, inspect full JSON, or export the calls and evidence. The connection panel includes an MCP client configuration and a prompt. “Explore dashboard” connects with read access. Seeding replaces only the existing public demo project. Never use its shared read key for real customer data.
 
-The dataset includes traffic sources/campaigns, repeat visitors, signup events, an ordered funnel, an Account signup goal, and timeline notes. Existing recorded-payment events are also included as optional historical context; this walkthrough requires no payment integration. For agent access, use the [MCP configuration](../../README.md#connect-an-agent) with demo read key `alr_bw_demo_9f2k7q4x1m8z3d6v`.
+Verify the actual protocol without an AI provider:
+
+```bash
+uv run python scripts/demo_mcp.py --output output/billwise-mcp.json
+# Replay the exact arguments from a browser evidence export:
+uv run python scripts/demo_mcp.py --replay /path/to/metricairn-billwise-evidence.json
+```
+
+The script starts a real stdio MCP session, runs the five read-only tools above, and emits their actual arguments and returned JSON. It uses only the public demo read key and does not inherit management or tracking credentials. Exact windows are preserved on replay; counts can still change if events are added or the fixture is reseeded.
+
+The dataset includes traffic sources/campaigns, repeat visitors, signup events, an ordered funnel, an Account signup goal, and timeline notes. Existing recorded-payment events remain optional historical context; this walkthrough requires no payment integration. For agent access, use the [MCP configuration](../../README.md#connect-an-agent) with demo read key `alr_bw_demo_9f2k7q4x1m8z3d6v`.
 
 ## Boundaries
 
