@@ -122,6 +122,7 @@ export function Settings() {
           <CardDescription>Annotate launches and campaigns — notes appear on your charts.</CardDescription>
         </CardHeader>
         <CardContent>
+          <p className="mb-2 text-[11px] text-slate-400">Tip: your AI agent can write these itself — enable <code className="font-mono">AGENTLENS_ENABLE_NOTE_WRITE=1</code> on the MCP server and it will log deploys as they ship.</p>
           <div className="flex gap-2">
             <Input value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder="Shipped v2 pricing page" onKeyDown={(e) => e.key === 'Enter' && addNote()} />
             <Button onClick={addNote}><Plus /> Add</Button>

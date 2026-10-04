@@ -17,6 +17,7 @@ class AgentLensClient:
         self.api_url = api_url.rstrip("/")
         self.read_key = read_key
         self.write_key = write_key
+        self._project_id: str | None = None
         self._http = httpx.Client(timeout=30, trust_env=False)  # bypass env proxies for localhost API
 
     # -- read helpers -----------------------------------------------------
@@ -70,6 +71,28 @@ class AgentLensClient:
 
     def ask(self, question: str, days: int):
         return self._post("/api/v1/ask", {"question": question, **_range(days)})
+
+    # -- timeline notes ------------------------------------------------------
+    # Notes are annotations (not analytics data), so the API accepts the read
+    # key for them — same as the dashboard. The MCP *tool* is still opt-in
+    # (see server.py): this method is just the transport.
+    def project_id(self) -> str:
+        if not self._project_id:
+            me = self._get("/api/v1/projects/me")
+            self._project_id = me["project_id"]
+        return self._project_id
+
+    def list_notes(self, limit: int = 20) -> list:
+        notes = self._get(f"/api/v1/projects/{self.project_id()}/notes")
+        return notes[:limit]
+
+    def add_note(self, text: str) -> dict:
+        text = " ".join(text.split())  # collapse whitespace/newlines
+        if not text:
+            raise ValueError("note text is empty")
+        if len(text) > 500:
+            raise ValueError("note too long (max 500 chars)")
+        return self._post(f"/api/v1/projects/{self.project_id()}/notes", {"text": text})
 
     # -- direction-2: the server observes its own usage --------------------
     def report_tool_call(self, tool: str, duration_ms: float, success: bool) -> None:

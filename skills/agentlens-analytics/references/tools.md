@@ -1,6 +1,6 @@
 # AgentLens MCP — Tool Reference
 
-All tools are **read-only**. Every tool accepts `days` (default 30) unless noted. Dates are UTC.
+All tools are **read-only by default**. Every tool accepts `days` (default 30) unless noted. Dates are UTC.
 
 ## Discovery
 
@@ -40,3 +40,11 @@ Plans the question (LLM when the API has `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`, h
 
 ### `mcp_usage(days=30)`
 How agents use this server: `{total_tool_calls, by_tool: [{tool, calls, error_rate, avg_ms}], questions_asked, recent_questions}`.
+
+## Timeline notes
+
+### `list_notes()`
+Newest-first timeline annotations (launches, deploys, campaigns). Shown on dashboard charts; cited by anomaly explanations.
+
+### `add_note(text)` — opt-in
+Only registered when `AGENTLENS_ENABLE_NOTE_WRITE=1`. Logs one factual line (max 500 chars) to the timeline, e.g. `"Deployed new pricing page"`. Use it when you ship something meaningful — it becomes the evidence future anomaly investigations cite.

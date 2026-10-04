@@ -119,7 +119,7 @@ class AskOut(BaseModel):
 
 
 class NoteCreate(BaseModel):
-    text: str
+    text: str = Field(min_length=1, max_length=2000)
     at: datetime | None = None
 
 

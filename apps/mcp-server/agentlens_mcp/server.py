@@ -1,4 +1,9 @@
-"""AgentLens MCP server — read-only analytics tools for AI agents.
+"""AgentLens MCP server — analytics tools for AI agents.
+
+Read-only by default (10 curated query tools + timeline reading). One write
+tool, `add_note`, is available opt-in via AGENTLENS_ENABLE_NOTE_WRITE=1 so a
+trusted agent can log deploys and launches to the timeline — which is exactly
+what makes future "why did revenue dip?" answers good.
 
 Curated on purpose: ~10 tools instead of 1,000. Small tool surfaces keep agent
 context lean and answers fast (see research: PostHog needed a "CLI mode" to work
@@ -110,6 +115,31 @@ def mcp_usage(days: int = 30) -> str:
     """How AI agents are using this MCP server: tool-call counts, error rates, and recent questions."""
     c = client()
     return json.dumps(timed_report(c, "mcp_usage", c.mcp_usage, days), indent=2)
+
+
+@mcp.tool()
+def list_notes() -> str:
+    """Timeline annotations: launches, deploys, campaigns the founder (or an agent) logged. Newest first."""
+    c = client()
+    notes = timed_report(c, "list_notes", c.list_notes)
+    return json.dumps(notes, indent=2)
+
+
+def add_note(text: str = "") -> str:
+    """Log a timeline annotation: a deploy, launch, campaign, or pricing change.
+
+    One factual line, e.g. "Deployed new pricing page" or "Launched on Product Hunt".
+    Notes appear on dashboard charts and make future "why did revenue dip?" answers
+    dramatically better — the agent can cite what changed. Keep it short and factual.
+    """
+    c = client()
+    return json.dumps(timed_report(c, "add_note", c.add_note, text), indent=2)
+
+
+# The single write capability, off by default: read-only stays the default
+# posture, and enabling it is an explicit "I trust my agent to annotate".
+if os.environ.get("AGENTLENS_ENABLE_NOTE_WRITE") == "1":
+    mcp.tool()(add_note)
 
 
 def main() -> None:

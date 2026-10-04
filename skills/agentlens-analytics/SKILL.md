@@ -5,7 +5,7 @@ description: Query AgentLens product analytics from an AI agent via MCP. Use whe
 
 # AgentLens Analytics
 
-AgentLens is privacy-friendly product analytics with a read-only MCP server. Query live data instead of guessing.
+AgentLens is privacy-friendly product analytics with an MCP server that is read-only by default. Query live data instead of guessing.
 
 ## Setup
 
@@ -16,7 +16,7 @@ AGENTLENS_API_URL=http://localhost:8000  # or your hosted API
 AGENTLENS_READ_KEY=alr_...               # read key from POST /api/v1/projects
 ```
 
-Add to your MCP client config (Claude Code: `claude mcp add`; Claude Desktop / Cursor: config JSON — see `examples/mcp-config.json`). The server is read-only by design: it cannot modify analytics data.
+Add to your MCP client config (Claude Code: `claude mcp add`; Claude Desktop / Cursor: config JSON — see `examples/mcp-config.json`). The server is read-only by default: it cannot modify analytics data. Set `AGENTLENS_ENABLE_NOTE_WRITE=1` to also expose `add_note`, so the agent can log deploys and launches to the timeline (see "Timeline notes" below).
 
 ## Workflow
 
@@ -25,6 +25,7 @@ Add to your MCP client config (Claude Code: `claude mcp add`; Claude Desktop / C
 3. **Ask in natural language.** The `ask` tool handles questions like "which landing page converts best from Google traffic?" — it plans and executes the query and returns an answer with data.
 4. **Ground every claim.** Cite the numbers the tools returned. If a tool returns no data, say so — do not extrapolate.
 5. **Respect ranges.** Default to the last 30 days; use the `days` parameter when the user names a window.
+6. **Annotate the timeline.** When `add_note` is available and you ship something meaningful (a deploy, launch, campaign, pricing change), log one factual line. Future "why did revenue dip?" investigations will cite it.
 
 ## Tool reference
 
