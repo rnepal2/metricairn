@@ -75,6 +75,9 @@ class AgentLensClient:
     def ask(self, question: str, days: int):
         return self._post("/api/v1/ask", {"question": question, **_range(days)})
 
+    def integration_health(self):
+        return self._get(f"/api/v1/projects/{self.project_id()}/data/health")
+
     # -- timeline notes ------------------------------------------------------
     # Notes are annotations (not analytics data), so the API accepts the read
     # key for them — same as the dashboard. The MCP *tool* is still opt-in

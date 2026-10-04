@@ -15,7 +15,7 @@ from app.core.database import get_db
 from app.core.security import require_read_key
 from app.models import ApiKey, Event, Note
 from app.schemas import AskOut, AskRequest
-from app.services import analytics, anomaly, nl
+from app.services import analytics, anomaly, coverage, nl
 from app.services.analytics import parse_range
 
 router = APIRouter(prefix="/api/v1/ask", tags=["ask"])
@@ -31,12 +31,13 @@ def ask(body: AskRequest, key: ApiKey = Depends(require_read_key), db: Session =
 
     action = plan.get("action", "overview")
     answer, data, chart = _execute(db, project_id, action, plan, start, end)
+    notes = coverage.coverage_notes(db, project_id, action, start, end)
 
     # Observe our own agent usage (direction-2 analytics).
     db.add(Event(project_id=project_id, name="ask", props={"question": body.question, "planner": planner, "action": action}))
     db.commit()
 
-    return AskOut(answer=answer, data=data, chart=chart, planner=planner)
+    return AskOut(answer=answer, data=data, chart=chart, planner=planner, coverage_notes=notes)
 
 
 def _execute(db: Session, project_id: str, action: str, plan: dict, start, end):

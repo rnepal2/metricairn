@@ -21,7 +21,8 @@ Add to your MCP client config (Claude Code: `claude mcp add`; Claude Desktop / C
 ## Workflow
 
 1. **Discover first.** Call `list_metrics` to see available metrics and dimensions before querying. Use `list_dimension_values` to learn the actual page paths, UTM sources, or event names in the data — never invent dimension values.
-2. **Query.** Prefer curated tools over raw exploration: `query_metrics` for trends, `breakdown` for top-N, `revenue_attribution` for money questions, `funnel_report` for conversion, `detect_anomalies` for spikes/dips.
+2. **Check the plumbing.** Call `integration_health` first when answers look empty or suspicious — most "wrong" answers are missing data (typically revenue events never wired), not wrong analysis. Surface its `coverage_notes` honestly.
+3. **Query.** Prefer curated tools over raw exploration: `query_metrics` for trends, `breakdown` for top-N, `revenue_attribution` for money questions, `funnel_report` for conversion, `detect_anomalies` for spikes/dips.
 3. **Ask in natural language.** The `ask` tool handles questions like "which landing page converts best from Google traffic?" — it plans and executes the query and returns an answer with data.
 4. **Ground every claim.** Cite the numbers the tools returned. If a tool returns no data, say so — do not extrapolate.
 5. **Respect ranges.** Default to the last 30 days; use the `days` parameter when the user names a window.

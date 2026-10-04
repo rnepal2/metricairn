@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Copy, Check, Code2, Bot, StickyNote, Plus, ShieldCheck, Trash2 } from 'lucide-react'
-import { api, getWriteKey, setWriteKey, type DataSummary } from '@/lib/api'
+import { api, getWriteKey, setWriteKey, type DataSummary, type IntegrationHealth } from '@/lib/api'
 import { useApp } from '@/lib/store'
 import { useFetch } from '@/lib/useFetch'
+import { HealthChecklist } from '@/components/HealthChecklist'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -33,6 +34,7 @@ function CodeBlock({ code, label }: { code: string; label: string }) {
 export function Settings() {
   const { project } = useApp()
   const notes = useFetch(() => (project ? api.notes(project.project_id) : Promise.resolve([])), [project?.project_id])
+  const health = useFetch<IntegrationHealth>(() => (project ? api.integrationHealth(project.project_id) : Promise.resolve(null as unknown as IntegrationHealth)), [project?.project_id])
   const [noteText, setNoteText] = useState('')
 
   const apiBase = typeof window !== 'undefined' ? window.location.origin.replace(':5173', ':8000') : 'http://localhost:8000'
@@ -77,6 +79,12 @@ export function Settings() {
           <CardDescription>Add one snippet to start tracking. No cookies, no personal data.</CardDescription>
         </CardHeader>
         <CardContent>
+          {health.data && (
+            <div className="mb-4">
+              <p className="mb-2 text-xs font-medium text-slate-500">Integration health — is your instrumentation flowing?</p>
+              <HealthChecklist checks={health.data.checks} />
+            </div>
+          )}
           <Tabs defaultValue="snippet">
             <TabsList>
               <TabsTrigger value="snippet">HTML snippet</TabsTrigger>

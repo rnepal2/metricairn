@@ -106,6 +106,15 @@ def ask(question: str = "", days: int = 30) -> str:
 
 
 @mcp.tool()
+def integration_health() -> str:
+    """Is the instrumentation actually flowing? Checklist: tracker pageviews, revenue events,
+    custom events, funnels, recency. Run this first when answers look empty or suspicious —
+    most 'wrong' answers are missing data, not wrong analysis."""
+    c = client()
+    return json.dumps(timed_report(c, "integration_health", c.integration_health), indent=2)
+
+
+@mcp.tool()
 def get_realtime() -> str:
     """Live activity: visitors, pageviews and top pages in the last 30 minutes."""
     c = client()

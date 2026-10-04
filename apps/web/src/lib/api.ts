@@ -64,7 +64,9 @@ export interface DataSummary {
 }
 export interface BreakdownRow { value: string; visitors: number; pageviews: number; revenue: number }
 export interface Anomaly { date: string; metric: string; value: number; expected: number; z_score: number; direction: string }
-export interface AskResult { answer: string; data: Record<string, unknown>[]; chart: { type: string; x_key: string; y_key: string; title: string } | null }
+export interface AskResult { answer: string; data: Record<string, unknown>[]; chart: { type: string; x_key: string; y_key: string; title: string } | null; planner?: string; coverage_notes?: string[] }
+export interface HealthCheck { key: string; label: string; status: 'ok' | 'warning' | 'missing'; detail: string }
+export interface IntegrationHealth { project_id: string; checks: HealthCheck[]; missing: string[] }
 export interface FunnelStepReport { step: { kind: string; value: string }; visitors: number; conversion_from_start: number; conversion_from_prev: number }
 export interface FunnelSegment { value: string; visitors: number; overall_conversion: number; steps: FunnelStepReport[] }
 export interface FunnelReport { name: string; overall_conversion: number; steps: FunnelStepReport[]; segments?: FunnelSegment[]; segment_by?: string }
@@ -117,4 +119,6 @@ export const api = {
     req<DataSummary>(`/api/v1/projects/${projectId}/data/summary`),
   deleteAllData: (projectId: string) =>
     reqWrite<{ ok: boolean; deleted: Record<string, number> }>(`/api/v1/projects/${projectId}/data`, { method: 'DELETE' }),
+  integrationHealth: (projectId: string) =>
+    req<IntegrationHealth>(`/api/v1/projects/${projectId}/data/health`),
 };

@@ -1,5 +1,5 @@
-import { Users, Eye, MousePointerClick, DollarSign } from 'lucide-react'
-import { api, type BreakdownRow, type Overview as OverviewT, type Point } from '@/lib/api'
+import { Users, Eye, MousePointerClick, DollarSign, AlertTriangle } from 'lucide-react'
+import { api, type BreakdownRow, type Overview as OverviewT, type Point, type IntegrationHealth } from '@/lib/api'
 import { useApp } from '@/lib/store'
 import { useFetch } from '@/lib/useFetch'
 import { fmtNum, fmtPct, fmtMoney } from '@/lib/utils'
@@ -44,16 +44,25 @@ function BreakdownCard({ title, rows, loading }: { title: string; rows: Breakdow
 }
 
 export function Overview() {
-  const { query } = useApp()
+  const { query, project, setPage } = useApp()
   const ov = useFetch<OverviewT>(() => api.overview(query), [query])
   const ts = useFetch<Point[]>(() => api.timeseries(query, 'visitors'), [query])
   const pages = useFetch<BreakdownRow[]>(() => api.breakdown(query, 'path'), [query])
   const refs = useFetch<BreakdownRow[]>(() => api.breakdown(query, 'utm_source'), [query])
   const devices = useFetch<BreakdownRow[]>(() => api.breakdown(query, 'device'), [query])
   const countries = useFetch<BreakdownRow[]>(() => api.breakdown(query, 'country'), [query])
+  const health = useFetch<IntegrationHealth>(() => (project ? api.integrationHealth(project.project_id) : Promise.resolve(null as unknown as IntegrationHealth)), [project?.project_id])
+  const revenueMissing = health.data?.checks.find((c) => c.key === 'revenue')?.status === 'missing'
 
   return (
     <div className="space-y-4">
+      {revenueMissing && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span>No revenue events in the last 7 days — every revenue answer depends on the server-side snippet.</span>
+          <button className="ml-auto shrink-0 font-medium underline" onClick={() => setPage('settings')}>Fix in Settings</button>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {ov.loading ? (
           Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24" />)

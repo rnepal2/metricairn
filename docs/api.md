@@ -110,5 +110,6 @@ digest settings). A read key can never delete data.
 |---|---|---|---|
 | GET | `/api/v1/projects/{id}/data/summary` | read | `{events, notes, funnels, revenue_events, first_event_at, last_event_at, top_events}` |
 | DELETE | `/api/v1/projects/{id}/data` | write | Delete everything; returns per-table counts |
+| GET | `/api/v1/projects/{id}/data/health` | read | Integration health checklist: `{checks: [{key, label, status, detail}], missing}` — is the instrumentation flowing? |
 
 Full trust story: `docs/trust-and-data.md`.

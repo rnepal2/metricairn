@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Sparkles, Send, Loader2, Lightbulb } from 'lucide-react'
+import { Sparkles, Send, Loader2, Lightbulb, AlertTriangle } from 'lucide-react'
 import { api, type AskResult } from '@/lib/api'
 import { useApp } from '@/lib/store'
 import { Button } from '@/components/ui/button'
@@ -75,6 +75,15 @@ export function Ask() {
               <Badge variant="info" className="mt-0.5 shrink-0">Answer</Badge>
               <p className="text-sm leading-relaxed">{result.answer}</p>
             </div>
+            {result.coverage_notes && result.coverage_notes.length > 0 && (
+              <div className="mt-3 space-y-1.5">
+                {result.coverage_notes.map((n, i) => (
+                  <p key={i} className="flex gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {n}
+                  </p>
+                ))}
+              </div>
+            )}
             {result.chart?.type === 'timeseries' && (
               <div className="mt-4"><TimeseriesChart data={result.data as unknown as { t: string; value: number }[]} title={result.chart.title} /></div>
             )}

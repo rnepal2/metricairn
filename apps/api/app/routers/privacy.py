@@ -23,6 +23,7 @@ from app.models import (
     Note,
 )
 from app.routers.projects import _assert_key_project
+from app.services import coverage
 
 router = APIRouter(prefix="/api/v1/projects", tags=["privacy"])
 
@@ -102,3 +103,17 @@ def delete_all_data(
         )
     db.commit()
     return {"ok": True, "deleted": deleted}
+
+
+@router.get("/{project_id}/data/health")
+def data_health(
+    project_id: str,
+    key: ApiKey = Depends(require_read_key),
+    db: Session = Depends(get_db),
+):
+    """Integration health checklist: is the customer's instrumentation
+    actually flowing? Surfaces the silent failure mode (tracker installed,
+    revenue events never wired) before it produces confident-sounding
+    answers built on absent data."""
+    _assert_key_project(key, project_id)
+    return coverage.health(db, project_id)

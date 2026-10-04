@@ -116,6 +116,7 @@ class AskOut(BaseModel):
     chart: dict | None = None  # {type: 'timeseries'|'bar', x_key, y_key, title}
     sql_hint: str | None = None
     planner: str = "heuristic"  # heuristic | llm — transparency about how the question was planned
+    coverage_notes: list[str] = Field(default_factory=list)  # what the answer couldn't see
 
 
 class NoteCreate(BaseModel):

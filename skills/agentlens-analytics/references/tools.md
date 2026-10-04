@@ -34,12 +34,15 @@ Last-30-minutes activity: `{visitors, pageviews, events, top_pages}`.
 ## Natural language
 
 ### `ask(question, days=30)`
-Plans the question (LLM when the API has `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`, heuristic otherwise) and returns `{answer, data, chart}`. Log of asked questions feeds `mcp_usage`.
+Plans the question (LLM when the API has `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`, heuristic otherwise) and returns `{answer, data, chart, coverage_notes}` — `coverage_notes` names what the answer couldn't see (e.g. no revenue events in range). Log of asked questions feeds `mcp_usage`.
 
 ## Meta
 
 ### `mcp_usage(days=30)`
 How agents use this server: `{total_tool_calls, by_tool: [{tool, calls, error_rate, avg_ms}], questions_asked, recent_questions}`.
+
+### `integration_health()`
+Integration checklist: `{checks: [{key, label, status: ok|warning|missing, detail}], missing: [...]}`. Run first when answers look empty — most "wrong" answers are missing data, not wrong analysis.
 
 ## Timeline notes
 
