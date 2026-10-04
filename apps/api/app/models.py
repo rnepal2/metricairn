@@ -55,6 +55,11 @@ class Event(Base):
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
     session_id: Mapped[str] = mapped_column(String(64), index=True, default="")
     visitor_id: Mapped[str] = mapped_column(String(64), index=True, default="")
+    # Optional identity: set when the customer identifies the user server-side
+    # (e.g. account id hash). Nullable — most customers won't send it.
+    user_id: Mapped[str | None] = mapped_column(String(128), index=True, nullable=True, default=None)
+    # Optional B2B scope: company/account id for account-level analytics.
+    group_id: Mapped[str | None] = mapped_column(String(128), index=True, nullable=True, default=None)
     name: Mapped[str] = mapped_column(String(200), index=True)
     path: Mapped[str] = mapped_column(String(1000), default="")
     url: Mapped[str] = mapped_column(String(2000), default="")

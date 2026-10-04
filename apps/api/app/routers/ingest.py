@@ -42,6 +42,8 @@ def ingest(
                 project_id=key.project_id,
                 session_id=e.session_id[:64],
                 visitor_id=e.visitor_id[:64],
+                user_id=(e.user_id[:128] if e.user_id else None),
+                group_id=(e.group_id[:128] if e.group_id else None),
                 name=e.name[:200],
                 path=_path_of(e.url),
                 url=e.url[:2000],

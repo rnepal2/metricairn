@@ -15,6 +15,7 @@ Exactly one thing: the event stream you push to `POST /api/v1/ingest/events`.
 | `path`, `url`, `referrer` | `/pricing` | Page context |
 | `utm_source/medium/campaign` | `invoice-template-guide` | Attribution |
 | `device`, `browser`, `os`, `country` | `desktop`, `Chrome` | Coarse, from user-agent + GeoIP |
+| `user_id`, `group_id` | `u_123`, `acme-corp` | Optional, only when you identify users server-side; NULL otherwise |
 | `props` | `{"plan": "pro"}` | Your custom properties |
 
 That's the whole data model. The dashboard's **Settings → Data & privacy** tab shows

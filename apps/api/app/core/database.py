@@ -35,3 +35,30 @@ def init_db() -> None:
     from app import models  # noqa: F401  (register models)
 
     Base.metadata.create_all(bind=engine)
+    ensure_columns()
+
+
+def ensure_columns() -> None:
+    """Lightweight migration: create_all creates missing *tables* but never
+    adds columns to existing ones. Backfill any model column absent from the
+    live table with ALTER TABLE ADD COLUMN (works on SQLite and Postgres).
+    New columns must be nullable (or have a server default) to backfill."""
+    from sqlalchemy import inspect, text
+
+    insp = inspect(engine)
+    live_tables = set(insp.get_table_names())
+    for table in Base.metadata.tables.values():
+        if table.name not in live_tables:
+            continue
+        existing = {c["name"] for c in insp.get_columns(table.name)}
+        for col in table.columns:
+            if col.name in existing:
+                continue
+            coltype = col.type.compile(dialect=engine.dialect)
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE {table.name} ADD COLUMN {col.name} {coltype}"))
+        # Backfill indexes declared on the model (ADD COLUMN doesn't create them).
+        for idx in table.indexes:
+            cols = ", ".join(c.name for c in idx.columns)
+            with engine.begin() as conn:
+                conn.execute(text(f"CREATE INDEX IF NOT EXISTS {idx.name} ON {table.name} ({cols})"))

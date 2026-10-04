@@ -32,6 +32,8 @@ class IngestEvent(BaseModel):
     referrer: str = ""
     session_id: str = ""
     visitor_id: str = ""
+    user_id: str | None = Field(default=None, max_length=128)  # optional identified user
+    group_id: str | None = Field(default=None, max_length=128)  # optional B2B account id
     device: str = ""
     browser: str = ""
     os: str = ""
