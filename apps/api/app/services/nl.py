@@ -11,13 +11,8 @@ service; the MCP `ask` tool uses the same endpoint, so both surfaces stay in syn
 
 from __future__ import annotations
 
-import json
 import re
 from datetime import datetime, timedelta, timezone
-
-import httpx
-
-from app.core.config import get_settings
 
 DATE_HINTS = [
     (r"last (\d+) days?", lambda m: int(m.group(1))),
@@ -64,12 +59,16 @@ def _funnel_segment(question: str) -> str | None:
 
 
 def heuristic_plan(question: str) -> dict:
-    """Map common questions to structured plans. Returns a plan dict."""
+    """Map common questions to structured plans. Returns a plan dict with a
+    ``confidence`` key: 0.85 when a specific rule matched, 0.25 on the generic
+    fallthrough. The ask router uses it to decide between the deterministic
+    fast path and the agentic SQL path."""
     q = question.lower()
     date_from, date_to = _date_range(question)
 
-    def base(action: str, **kw) -> dict:
-        plan = {"action": action, "date_from": date_from, "date_to": date_to}
+    def base(action: str, conf: float = 0.85, **kw) -> dict:
+        plan = {"action": action, "date_from": date_from, "date_to": date_to,
+                "confidence": conf}
         plan.update(kw)
         return plan
 
@@ -77,6 +76,10 @@ def heuristic_plan(question: str) -> dict:
         if any(w in q for w in ("why", "what happened", "explain", "because", "cause")):
             return base("explain")
         return base("anomalies")
+    # Comparison / multi-period questions need composed queries the ten fixed
+    # actions can't express — route them to the agentic SQL path.
+    if re.search(r"\bcompare\b|\bvs\.?\b|\bversus\b|difference between", q):
+        return base("overview", conf=0.25)
     if any(w in q for w in ("funnel", "leak", "drop-off", "dropoff", "convert")):
         return base("funnels", segment_by=_funnel_segment(q))
     if any(w in q for w in ("content", "blog", "post", "article")):
@@ -105,88 +108,18 @@ def heuristic_plan(question: str) -> dict:
         return base("timeseries_smart")
     if "mcp" in q and any(w in q for w in ("usage", "tool", "agent")):
         return base("mcp_usage")
-    return base("overview")
+    return base("overview", conf=0.25)
 
 
-PLAN_SCHEMA_HINT = """Return ONLY a JSON object with this shape:
-{"action": one of [overview, timeseries_smart, breakdown, revenue, revenue_by_source, realtime, anomalies, explain, funnels, mcp_usage],
- "dimension": optional one of [path, referrer, utm_source, utm_medium, utm_campaign, device, browser, os, country, event],
- "metric": optional one of [visitors, pageviews, sessions, events, revenue],
- "days": optional integer lookback window}
-"""
+def plan(question: str) -> tuple[dict, str, float]:
+    """Return (plan, planner_used, confidence).
 
-
-def llm_plan(question: str) -> dict | None:
-    settings = get_settings()
-    try:
-        if settings.anthropic_api_key:
-            return _anthropic_plan(question, settings.anthropic_api_key, settings.ask_model)
-        if settings.openai_api_key:
-            return _openai_plan(question, settings.openai_api_key)
-    except Exception:
-        return None
-    return None
-
-
-def _anthropic_plan(question: str, api_key: str, model: str) -> dict | None:
-    resp = httpx.post(
-        "https://api.anthropic.com/v1/messages",
-        headers={"x-api-key": api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
-        json={
-            "model": model,
-            "max_tokens": 300,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": f"You map product-analytics questions to query plans.\n{PLAN_SCHEMA_HINT}\nQuestion: {question}",
-                }
-            ],
-        },
-        timeout=20,
-    )
-    resp.raise_for_status()
-    text = resp.json()["content"][0]["text"]
-    plan = json.loads(text[text.index("{") : text.rindex("}") + 1])
-    return _normalize_llm_plan(plan)
-
-
-def _openai_plan(question: str, api_key: str) -> dict | None:
-    resp = httpx.post(
-        "https://api.openai.com/v1/chat/completions",
-        headers={"authorization": f"Bearer {api_key}", "content-type": "application/json"},
-        json={
-            "model": "gpt-4o-mini",
-            "max_tokens": 300,
-            "response_format": {"type": "json_object"},
-            "messages": [
-                {"role": "system", "content": f"You map product-analytics questions to query plans.\n{PLAN_SCHEMA_HINT}"},
-                {"role": "user", "content": question},
-            ],
-        },
-        timeout=20,
-    )
-    resp.raise_for_status()
-    plan = json.loads(resp.json()["choices"][0]["message"]["content"])
-    return _normalize_llm_plan(plan)
-
-
-def _normalize_llm_plan(plan: dict) -> dict:
-    days = plan.get("days")
-    date_from = date_to = None
-    if isinstance(days, int) and days > 0:
-        end = datetime.now(timezone.utc)
-        date_from, date_to = (end - timedelta(days=days)).isoformat(), end.isoformat()
-    out = {"action": plan.get("action", "overview"), "date_from": date_from, "date_to": date_to}
-    if plan.get("dimension"):
-        out["dimension"] = plan["dimension"]
-    if plan.get("metric"):
-        out["metric"] = plan["metric"]
-    return out
-
-
-def plan(question: str) -> tuple[dict, str]:
-    """Return (plan, planner_used)."""
-    llm = llm_plan(question)
-    if llm and llm.get("action"):
-        return llm, "llm"
-    return heuristic_plan(question), "heuristic"
+    Intent classification is heuristic-only by design. The old LLM
+    intent-classifier was retired: an LLM picking among ten intents added
+    latency for no quality gain on head questions, and the long tail is now
+    served by the agentic SQL path (see services/sql_agent.py), where the
+    LLM writes SQL against the fixed event schema instead. Low heuristic
+    confidence is the signal that routes a question to the agentic path.
+    """
+    p = heuristic_plan(question)
+    return p, "heuristic", p["confidence"]

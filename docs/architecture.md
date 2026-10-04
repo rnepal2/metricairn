@@ -59,7 +59,7 @@ We ship 10 curated tools.
 **Natural language without lock-in.** `/api/v1/ask` plans via LLM when
 `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` is set, otherwise a heuristic parser handles the
 common questions. Same endpoint serves the dashboard and the MCP `ask` tool, so both
-surfaces stay in sync. Responses include `planner: heuristic|llm` for transparency.
+surfaces stay in sync. Responses include `planner: heuristic|agentic_sql` for transparency.
 
 **Privacy model.** No cookies; visitor identity is a random ID in `localStorage`
 (the user can clear it); no IP storage, no fingerprinting. Server-side tracking is

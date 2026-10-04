@@ -34,7 +34,7 @@ Last-30-minutes activity: `{visitors, pageviews, events, top_pages}`.
 ## Natural language
 
 ### `ask(question, days=30)`
-Plans the question (LLM when the API has `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`, heuristic otherwise) and returns `{answer, data, chart, planner, coverage_notes, based_on}` — `coverage_notes` names what the answer couldn't see (e.g. no revenue events in range); `based_on` is the provenance footer (`{events, event_names, date_range}`). Log of asked questions feeds `mcp_usage`.
+Classifies the question with the heuristic planner (low-confidence questions route to the agentic SQL path when an LLM key is configured) and returns `{answer, data, chart, planner, coverage_notes, based_on}` — `coverage_notes` names what the answer couldn't see (e.g. no revenue events in range); `based_on` is the provenance footer (`{events, event_names, date_range}`). Log of asked questions feeds `mcp_usage`.
 
 ## Meta
 

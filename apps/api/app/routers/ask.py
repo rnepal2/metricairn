@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/v1/ask", tags=["ask"])
 
 @router.post("", response_model=AskOut)
 def ask(body: AskRequest, key: ApiKey = Depends(require_read_key), db: Session = Depends(get_db)):
-    plan, planner = nl.plan(body.question)
+    plan, planner, confidence = nl.plan(body.question)
     project_id = key.project_id
     date_from = plan.get("date_from") or body.date_from
     date_to = plan.get("date_to") or body.date_to

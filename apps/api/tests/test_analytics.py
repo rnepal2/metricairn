@@ -141,6 +141,22 @@ def test_nl_heuristic_plans():
     assert nl.heuristic_plan("what is happening right now?")["action"] == "realtime"
 
 
+def test_heuristic_confidence_routes():
+    # Specific rule matches → high confidence → deterministic fast path.
+    plan, planner, conf = nl.plan("why did revenue dip last week?")
+    assert planner == "heuristic"
+    assert plan["action"] == "explain"
+    assert conf >= 0.7
+    plan, _, conf = nl.plan("how much revenue did we make?")
+    assert conf >= 0.7
+    # No rule matches → low confidence → agentic path candidate.
+    plan, planner, conf = nl.plan("compare this month's revenue to last month")
+    assert plan["action"] == "overview"  # generic fallthrough
+    assert conf < 0.7
+    _, _, conf = nl.plan("what is the weather today?")
+    assert conf < 0.7
+
+
 def _client(db):
     app = create_app()
 
