@@ -22,8 +22,8 @@ Top values: `[{"value", "visitors", "pageviews", "revenue"}, ...]` sorted by vis
 ### `revenue_attribution(days=30)`
 `{total, currency, transactions, revenue_per_visitor, by_source: [{source, revenue}], timeseries}`.
 
-### `funnel_report(funnel, days=30)`
-`funnel` matches by name (case-insensitive) or id. Returns per-step `{visitors, conversion_from_start, conversion_from_prev}` plus `overall_conversion`. Steps must be completed in order.
+### `funnel_report(funnel, days=30, segment_by="")`
+`funnel` matches by name (case-insensitive) or id. Returns per-step `{visitors, conversion_from_start, conversion_from_prev}` plus `overall_conversion`. Steps must be completed in order. With `segment_by` (e.g. `"device"`, `"utm_source"`), also returns per-segment tables — a visitor's segment is the dimension value on their entry-step event.
 
 ### `detect_anomalies(days=30)`
 Z-score anomalies on daily pageviews and revenue: `[{date, metric, value, expected, z_score, direction}]`, direction ∈ spike|dip.

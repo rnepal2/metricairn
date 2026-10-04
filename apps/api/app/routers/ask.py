@@ -120,6 +120,7 @@ def _execute(db: Session, project_id: str, action: str, plan: dict, start, end):
         funnels = db.query(Funnel).filter(Funnel.project_id == project_id).all()
         if not funnels:
             return "No funnels defined yet. Create one in the dashboard under Funnels.", [], None
+        segment_by = plan.get("segment_by")
         rows = []
         detail = ""
         for f in funnels:
@@ -139,6 +140,19 @@ def _execute(db: Session, project_id: str, action: str, plan: dict, start, end):
                     f" '{f.name}': {steps[0]['visitors']:,} entered; {seq}. "
                     f"Biggest leak: → {worst_step} ({worst_conv:.1%} step conversion)."
                 )
+        if segment_by:
+            segs = analytics.funnel_report_by_segment(db, funnels[0].project_id, funnels[0].steps, start, end, segment_by)
+            if segs:
+                ranked = sorted(segs, key=lambda s: s["overall_conversion"], reverse=True)
+                comp = ", ".join(f"{s['value']} {s['overall_conversion']:.1%}" for s in ranked[:5])
+                detail += f" By {segment_by}: {comp}."
+                rows = [
+                    {"segment": s["value"], "visitors": s["visitors"], "overall_conversion": s["overall_conversion"]}
+                    for s in ranked
+                ]
+                best = max(rows, key=lambda r: r["overall_conversion"])
+                answer = f"'{funnels[0].name}' by {segment_by}: best is '{best['segment']}' at {best['overall_conversion']:.1%}." + detail
+                return answer, rows, None
         best = max(rows, key=lambda r: r["overall_conversion"])
         answer = f"{len(rows)} funnel(s). Best converting: '{best['funnel']}' at {best['overall_conversion']:.1%}." + detail
         return answer, rows, None

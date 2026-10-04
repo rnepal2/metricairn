@@ -47,7 +47,7 @@ All range queries accept `date_from` / `date_to` (ISO 8601, default last 30 days
 |---|---|---|---|
 | POST | `/api/v1/funnels` | read | `{name, steps: [{kind: page\|event, value}]}` |
 | GET | `/api/v1/funnels` | read | List |
-| GET | `/api/v1/funnels/{id}/report` | read | Ordered conversion: per-step visitors, from-start and from-previous rates |
+| GET | `/api/v1/funnels/{id}/report` | read | Ordered conversion: per-step visitors, from-start and from-previous rates. `?segment_by=device` adds per-segment tables (top 8 by entry visitors; a visitor's segment is the dimension value on their entry-step event) |
 
 ## Ask (natural language)
 

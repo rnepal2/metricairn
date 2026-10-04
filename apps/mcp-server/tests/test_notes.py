@@ -134,3 +134,24 @@ def test_add_note_tool_calls_client(monkeypatch):
     out = json.loads(srv.add_note("Launched on PH"))
     assert out["ok"] is True
     assert calls == ["Launched on PH"]
+
+
+def test_funnel_report_segment_param(api_client):
+    seen = {}
+
+    orig_get = api_client._http.get
+
+    def rec_get(url, params=None, headers=None):
+        seen["url"] = url
+        seen["params"] = params or {}
+        return orig_get(url, params, headers)
+
+    api_client._http.get = rec_get
+    api_client._project_id = "p1"
+
+    api_client.funnel_report("f1", 30, segment_by="device")
+    assert seen["url"] == "http://x/api/v1/funnels/f1/report"
+    assert seen["params"]["segment_by"] == "device"
+
+    api_client.funnel_report("f1", 30)
+    assert "segment_by" not in seen["params"]

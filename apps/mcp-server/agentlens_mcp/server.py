@@ -68,8 +68,10 @@ def list_dimension_values(dimension: str = "path", days: int = 30) -> str:
 
 
 @mcp.tool()
-def funnel_report(funnel: str = "", days: int = 30) -> str:
-    """Conversion report for a funnel (match by name or id). Steps must be completed in order."""
+def funnel_report(funnel: str = "", days: int = 30, segment_by: str = "") -> str:
+    """Conversion report for a funnel (match by name or id). Steps must be completed in order.
+    Pass segment_by (e.g. 'device', 'utm_source') to compare conversion per segment —
+    a visitor's segment is the dimension value on their entry-step event."""
     c = client()
 
     def _run():
@@ -77,7 +79,7 @@ def funnel_report(funnel: str = "", days: int = 30) -> str:
         match = next((f for f in funnels if f["id"] == funnel or f["name"].lower() == funnel.lower()), None)
         if not match:
             return {"error": f"funnel {funnel!r} not found", "available": [f["name"] for f in funnels]}
-        return c.funnel_report(match["id"], days)
+        return c.funnel_report(match["id"], days, segment_by or None)
 
     return json.dumps(timed_report(c, "funnel_report", _run), indent=2)
 

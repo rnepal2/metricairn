@@ -60,6 +60,9 @@ export interface Point { t: string; value: number }
 export interface BreakdownRow { value: string; visitors: number; pageviews: number; revenue: number }
 export interface Anomaly { date: string; metric: string; value: number; expected: number; z_score: number; direction: string }
 export interface AskResult { answer: string; data: Record<string, unknown>[]; chart: { type: string; x_key: string; y_key: string; title: string } | null }
+export interface FunnelStepReport { step: { kind: string; value: string }; visitors: number; conversion_from_start: number; conversion_from_prev: number }
+export interface FunnelSegment { value: string; visitors: number; overall_conversion: number; steps: FunnelStepReport[] }
+export interface FunnelReport { name: string; overall_conversion: number; steps: FunnelStepReport[]; segments?: FunnelSegment[]; segment_by?: string }
 export interface AlertChannel { id: string; kind: string; target: string; enabled: boolean; created_at: string }
 export interface AlertRule { id: string; name: string; metric: string; direction: string; min_z: number; cooldown_hours: number; enabled: boolean; created_at: string }
 export interface AlertDelivery { id: string; channel_id: string; rule_id: string; anomaly_key: string; status: string; detail: string; created_at: string }
@@ -78,8 +81,8 @@ export const api = {
   funnels: () => req<{ id: string; name: string; steps: { kind: string; value: string }[] }[]>('/api/v1/funnels'),
   createFunnel: (name: string, steps: { kind: string; value: string }[]) =>
     req<{ id: string }>('/api/v1/funnels', { method: 'POST', body: JSON.stringify({ name, steps }) }),
-  funnelReport: (id: string, q: string) =>
-    req<{ name: string; overall_conversion: number; steps: { step: { kind: string; value: string }; visitors: number; conversion_from_start: number; conversion_from_prev: number }[] }>(`/api/v1/funnels/${id}/report?${q}`),
+  funnelReport: (id: string, q: string, segmentBy?: string) =>
+    req<FunnelReport>(`/api/v1/funnels/${id}/report?${q}${segmentBy ? `&segment_by=${segmentBy}` : ''}`),
   ask: (question: string, q: string) =>
     req<AskResult>('/api/v1/ask', { method: 'POST', body: JSON.stringify({ question, ...Object.fromEntries(new URLSearchParams(q)) }) }),
   notes: (projectId: string) => req<{ id: string; text: string; at: string }[]>(`/api/v1/projects/${projectId}/notes`),

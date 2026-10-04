@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Plus, Trash2, ArrowDown } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, type FunnelReport } from '@/lib/api'
 import { useApp } from '@/lib/store'
 import { useFetch } from '@/lib/useFetch'
 import { fmtPct, fmtNum } from '@/lib/utils'
@@ -13,13 +13,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 
 interface Step { kind: 'page' | 'event'; value: string }
 
+const SEGMENT_DIMS = ['device', 'browser', 'os', 'country', 'utm_source', 'utm_medium', 'utm_campaign']
+
 export function Funnels() {
   const { query } = useApp()
   const list = useFetch(() => api.funnels(), [])
   const [selected, setSelected] = useState<string | null>(null)
-  const report = useFetch(
-    () => (selected ? api.funnelReport(selected, query) : Promise.resolve(null as never)),
-    [selected, query]
+  const [segmentBy, setSegmentBy] = useState<string>('')
+  const report = useFetch<FunnelReport>(
+    () => (selected ? api.funnelReport(selected, query, segmentBy || undefined) : Promise.resolve(null as never)),
+    [selected, query, segmentBy]
   )
 
   const [open, setOpen] = useState(false)
@@ -106,10 +109,37 @@ export function Funnels() {
             <Skeleton className="h-64" />
           ) : report.data ? (
             <div className="space-y-1">
-              <div className="mb-3 flex items-center gap-2">
+              <div className="mb-3 flex flex-wrap items-center gap-2">
                 <span className="text-sm font-medium">{report.data.name}</span>
                 <Badge variant="info">overall {fmtPct(report.data.overall_conversion)}</Badge>
+                <span className="ml-auto flex items-center gap-1.5 text-xs text-slate-500">
+                  Segment by
+                  <Select value={segmentBy || 'none'} onValueChange={(v) => setSegmentBy(v === 'none' ? '' : v)}>
+                    <SelectTrigger className="h-7 w-36"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Off</SelectItem>
+                      {SEGMENT_DIMS.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </span>
               </div>
+              {report.data.segments && report.data.segments.length > 0 && (
+                <div className="mb-4 rounded-lg border border-slate-200 p-3">
+                  <p className="mb-2 text-xs font-medium text-slate-500">Conversion by {report.data.segment_by} (visitor's entry {report.data.segment_by})</p>
+                  <div className="space-y-1.5">
+                    {report.data.segments.map((seg) => (
+                      <div key={seg.value} className="flex items-center gap-2 text-xs">
+                        <span className="w-28 truncate font-medium">{seg.value}</span>
+                        <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+                          <div className="h-full rounded-full bg-emerald-600" style={{ width: `${Math.max(2, seg.overall_conversion * 100)}%` }} />
+                        </div>
+                        <span className="w-12 text-right font-semibold">{fmtPct(seg.overall_conversion)}</span>
+                        <span className="w-16 text-right text-slate-400">{fmtNum(seg.visitors)} in</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {report.data.steps.map((s, i) => (
                 <div key={i}>
                   {i > 0 && <div className="flex justify-center py-0.5"><ArrowDown className="h-3.5 w-3.5 text-slate-300" /></div>}

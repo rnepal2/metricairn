@@ -36,6 +36,7 @@ def funnel_report(
     funnel_id: str,
     date_from: str | None = None,
     date_to: str | None = None,
+    segment_by: str | None = None,
     key: ApiKey = Depends(require_read_key),
     db: Session = Depends(get_db),
 ):
@@ -49,4 +50,13 @@ def funnel_report(
     start, end = parse_range(date_from, date_to)
     steps = analytics.funnel_report(db, key.project_id, funnel.steps, start, end)
     overall = steps[-1]["conversion_from_start"] if steps else 0.0
-    return {"funnel_id": funnel.id, "name": funnel.name, "steps": steps, "overall_conversion": overall}
+    out = {"funnel_id": funnel.id, "name": funnel.name, "steps": steps, "overall_conversion": overall}
+    if segment_by:
+        try:
+            out["segments"] = analytics.funnel_report_by_segment(
+                db, key.project_id, funnel.steps, start, end, segment_by
+            )
+            out["segment_by"] = segment_by
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+    return out

@@ -236,8 +236,22 @@ def revenue_report(db: Session, project_id: str, start: datetime, end: datetime)
     }
 
 
-def funnel_report(db: Session, project_id: str, steps: list[dict], start: datetime, end: datetime) -> list[dict]:
-    """Ordered funnel: visitors must complete steps in order (by first occurrence time)."""
+def _dim_value(e: Event, dimension: str) -> str:
+    """Display value of a dimension on one event, with the same rules as breakdown."""
+    col = DIMENSIONS[dimension]
+    raw = getattr(e, col) or ""
+    if dimension == "referrer":
+        return referrer_domain(raw) or "(not set)"
+    if dimension == "path":
+        return raw or "/"
+    return raw or "(not set)"
+
+
+def _funnel_firsts(
+    db: Session, project_id: str, steps: list[dict], start: datetime, end: datetime
+) -> tuple[list[dict[str, datetime]], dict[str, "Event"]]:
+    """First-occurrence time per visitor per step, plus each visitor's step-0
+    event (for segment attribution)."""
     events = _base_query(db, project_id, start, end).order_by(Event.created_at).all()
 
     def matches(e: Event, step: dict) -> bool:
@@ -248,15 +262,20 @@ def funnel_report(db: Session, project_id: str, steps: list[dict], start: dateti
             return e.name == value
         return False
 
-    # first-occurrence time per visitor per step
     first: list[dict[str, datetime]] = []
-    for step in steps:
+    entry_event: dict[str, Event] = {}
+    for i, step in enumerate(steps):
         occ: dict[str, datetime] = {}
         for e in events:
             if e.visitor_id and matches(e, step) and e.visitor_id not in occ:
                 occ[e.visitor_id] = e.created_at
+                if i == 0:
+                    entry_event[e.visitor_id] = e
         first.append(occ)
+    return first, entry_event
 
+
+def _conversion_steps(first: list[dict[str, datetime]], steps: list[dict]) -> list[dict]:
     converted = set(first[0].keys()) if first else set()
     counts = [len(converted)]
     for i in range(1, len(steps)):
@@ -275,6 +294,53 @@ def funnel_report(db: Session, project_id: str, steps: list[dict], start: dateti
                 "visitors": counts[i],
                 "conversion_from_start": round(conv_start, 4),
                 "conversion_from_prev": round(conv_prev, 4),
+            }
+        )
+    return out
+
+
+def funnel_report(db: Session, project_id: str, steps: list[dict], start: datetime, end: datetime) -> list[dict]:
+    """Ordered funnel: visitors must complete steps in order (by first occurrence time)."""
+    first, _ = _funnel_firsts(db, project_id, steps, start, end)
+    return _conversion_steps(first, steps)
+
+
+def funnel_report_by_segment(
+    db: Session,
+    project_id: str,
+    steps: list[dict],
+    start: datetime,
+    end: datetime,
+    segment_by: str,
+    max_segments: int = 8,
+) -> list[dict]:
+    """Same ordered funnel, computed per segment.
+
+    A visitor's segment is the dimension value on their *entry-step* (step 0)
+    event — the device, source, etc. they arrived with. Documented choice:
+    dimensions can vary across a visitor's events, so we anchor on entry.
+    Returns the top segments by entry visitors, each with its own step table.
+    """
+    if segment_by not in DIMENSIONS:
+        raise ValueError(f"unknown dimension {segment_by!r}; choose from {list(DIMENSIONS)}")
+    first, entry_event = _funnel_firsts(db, project_id, steps, start, end)
+
+    # segment per visitor from their step-0 event
+    by_seg: dict[str, set[str]] = {}
+    for v, e in entry_event.items():
+        by_seg.setdefault(_dim_value(e, segment_by), set()).add(v)
+    top = sorted(by_seg.items(), key=lambda kv: len(kv[1]), reverse=True)[:max_segments]
+
+    out = []
+    for value, visitors in top:
+        seg_first = [{v: t for v, t in occ.items() if v in visitors} for occ in first]
+        seg_steps = _conversion_steps(seg_first, steps)
+        out.append(
+            {
+                "value": value,
+                "visitors": len(visitors),
+                "overall_conversion": seg_steps[-1]["conversion_from_start"] if seg_steps else 0.0,
+                "steps": seg_steps,
             }
         )
     return out

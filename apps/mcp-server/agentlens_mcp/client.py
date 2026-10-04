@@ -66,8 +66,11 @@ class AgentLensClient:
     def funnels(self):
         return self._get("/api/v1/funnels")
 
-    def funnel_report(self, funnel_id: str, days: int):
-        return self._get(f"/api/v1/funnels/{funnel_id}/report", _range(days))
+    def funnel_report(self, funnel_id: str, days: int, segment_by: str | None = None):
+        params = _range(days)
+        if segment_by:
+            params["segment_by"] = segment_by
+        return self._get(f"/api/v1/funnels/{funnel_id}/report", params)
 
     def ask(self, question: str, days: int):
         return self._post("/api/v1/ask", {"question": question, **_range(days)})

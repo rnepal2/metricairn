@@ -41,6 +41,28 @@ def _date_range(question: str) -> tuple[str | None, str | None]:
     return None, None
 
 
+_FUNNEL_SEGMENTS = [
+    (("device", "mobile", "desktop", "tablet"), "device"),
+    (("browser", "chrome", "safari", "firefox"), "browser"),
+    (("utm_source", "source", "channel"), "utm_source"),
+    (("utm_medium", "medium"), "utm_medium"),
+    (("utm_campaign", "campaign"), "utm_campaign"),
+    (("country", "countries", "geography"), "country"),
+    (("os", "operating system"), "os"),
+]
+
+
+def _funnel_segment(question: str) -> str | None:
+    """Detect a segment dimension in a funnel question ('which device converts
+    best' → 'device'). Returns None when no segment is named."""
+    q = question.lower()
+    for keywords, dimension in _FUNNEL_SEGMENTS:
+        for k in keywords:
+            if re.search(rf"\b{re.escape(k)}\b", q):
+                return dimension
+    return None
+
+
 def heuristic_plan(question: str) -> dict:
     """Map common questions to structured plans. Returns a plan dict."""
     q = question.lower()
@@ -56,13 +78,13 @@ def heuristic_plan(question: str) -> dict:
             return base("explain")
         return base("anomalies")
     if any(w in q for w in ("funnel", "leak", "drop-off", "dropoff", "convert")):
-        return base("funnels")
+        return base("funnels", segment_by=_funnel_segment(q))
     if any(w in q for w in ("content", "blog", "post", "article")):
         return base("breakdown", dimension="utm_campaign")
     if any(w in q for w in ("right now", "realtime", "real-time", "live", "currently")):
         return base("realtime")
     if "funnel" in q:
-        return base("funnels")
+        return base("funnels", segment_by=_funnel_segment(q))
     if "revenue" in q and any(w in q for w in ("source", "channel", "utm", "where", "from")):
         return base("revenue_by_source")
     if "revenue" in q:
