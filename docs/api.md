@@ -98,3 +98,17 @@ Eastern); the scheduler sends once per slot and never backfills.
 | PUT | `/api/v1/digest/settings` | write | `{enabled, weekday 0–6, hour_utc 0–23}` |
 | POST | `/api/v1/digest/preview` | read | Compile without sending |
 | POST | `/api/v1/digest/send` | write | Send now (requires enabled) |
+
+## Data transparency & deletion
+
+AgentLens only ever sees the events you send us — these endpoints make that
+verifiable. Deleting data keeps the project and its API keys; it removes every
+row derived from customer activity (events, notes, funnels, alert config/history,
+digest settings). A read key can never delete data.
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/api/v1/projects/{id}/data/summary` | read | `{events, notes, funnels, revenue_events, first_event_at, last_event_at, top_events}` |
+| DELETE | `/api/v1/projects/{id}/data` | write | Delete everything; returns per-table counts |
+
+Full trust story: `docs/trust-and-data.md`.

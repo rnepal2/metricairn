@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Copy, Check, Code2, Bot, StickyNote, Plus } from 'lucide-react'
-import { api } from '@/lib/api'
+import { Copy, Check, Code2, Bot, StickyNote, Plus, ShieldCheck, Trash2 } from 'lucide-react'
+import { api, getWriteKey, setWriteKey, type DataSummary } from '@/lib/api'
 import { useApp } from '@/lib/store'
 import { useFetch } from '@/lib/useFetch'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -128,6 +128,20 @@ export function Settings() {
 
       <Card>
         <CardHeader>
+          <CardTitle className="flex items-center gap-2"><ShieldCheck className="h-4 w-4" /> Data &amp; privacy</CardTitle>
+          <CardDescription>Exactly what AgentLens holds for this project — and nothing else. We only ever see the events you send us: no database access, no Stripe OAuth.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DataPrivacy projectId={project?.project_id} />
+          <p className="mt-3 text-xs text-slate-500">
+            Full story: <code className="font-mono">docs/trust-and-data.md</code> — what we collect,
+            what we never see, and the revenue-events dependency behind every revenue answer.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle className="flex items-center gap-2"><StickyNote className="h-4 w-4" /> Timeline notes</CardTitle>
           <CardDescription>Annotate launches and campaigns — notes appear on your charts.</CardDescription>
         </CardHeader>
@@ -147,6 +161,108 @@ export function Settings() {
           </div>
         </CardContent>
       </Card>
+    </div>
+  )
+}
+
+function DataPrivacy({ projectId }: { projectId?: string }) {
+  const [writeKey, setWk] = useState(getWriteKey() ?? '')
+  const [confirming, setConfirming] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [done, setDone] = useState<Record<string, number> | null>(null)
+  const summary = useFetch<DataSummary>(
+    () => (projectId ? api.dataSummary(projectId) : Promise.resolve(null as unknown as DataSummary)),
+    [projectId, done],
+  )
+
+  async function doDelete() {
+    if (!projectId) return
+    setBusy(true); setError('')
+    try {
+      setWriteKey(writeKey.trim())
+      const r = await api.deleteAllData(projectId)
+      setDone(r.deleted)
+      setConfirming(false)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Delete failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const s = summary.data
+  return (
+    <div className="space-y-3">
+      {summary.loading ? <Skeleton className="h-20" /> : s && (
+        <div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {[
+              ['Events', (s.events ?? 0).toLocaleString()],
+              ['Revenue events', (s.revenue_events ?? 0).toLocaleString()],
+              ['Notes', (s.notes ?? 0).toLocaleString()],
+              ['Funnels', (s.funnels ?? 0).toLocaleString()],
+            ].map(([label, v]) => (
+              <div key={label} className="rounded-lg bg-slate-50 px-3 py-2">
+                <div className="text-lg font-bold">{v}</div>
+                <div className="text-[11px] text-slate-500">{label}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 text-xs text-slate-500">
+            {s.first_event_at
+              ? <>Holding data from <strong>{new Date(s.first_event_at).toLocaleDateString()}</strong> to <strong>{new Date(s.last_event_at!).toLocaleDateString()}</strong>.</>
+              : 'No events received yet.'}
+            {s.top_events?.length > 0 && (
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {s.top_events.map((e) => (
+                  <span key={e.name} className="rounded-full bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-slate-600">
+                    {e.name} · {e.count.toLocaleString()}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {done && (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+          Deleted: {Object.entries(done).map(([k, v]) => `${v.toLocaleString()} ${k}`).join(', ')}.
+          Project and API keys kept.
+        </p>
+      )}
+      <div className="rounded-lg border border-red-200 bg-red-50/50 p-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-red-900">Delete all my data</p>
+            <p className="text-xs text-red-700/80">Removes every event, note, funnel, and alert record. Your project and keys survive. This cannot be undone.</p>
+          </div>
+          {!confirming && (
+            <Button variant="outline" size="sm" className="border-red-300 text-red-700 hover:bg-red-100" onClick={() => setConfirming(true)}>
+              <Trash2 className="h-3.5 w-3.5" /> Delete…
+            </Button>
+          )}
+        </div>
+        {confirming && (
+          <div className="mt-3 space-y-2">
+            <p className="text-xs font-medium text-red-900">This requires your write key — a read key alone can never delete data.</p>
+            <div className="flex gap-2">
+              <Input
+                type="password"
+                value={writeKey}
+                onChange={(e) => setWk(e.target.value)}
+                placeholder="alw_… write key"
+                className="font-mono text-xs"
+              />
+              <Button size="sm" variant="destructive" disabled={busy || !writeKey.trim()} onClick={doDelete}>
+                {busy ? 'Deleting…' : 'Yes, delete everything'}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => { setConfirming(false); setError('') }}>Cancel</Button>
+            </div>
+            {error && <p className="text-xs text-red-700">{error}</p>}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -57,6 +57,11 @@ export interface Overview {
   avg_session_seconds: number; events: number; revenue: number; revenue_currency: string;
 }
 export interface Point { t: string; value: number }
+export interface DataSummary {
+  project_id: string; events: number; notes: number; funnels: number; revenue_events: number;
+  first_event_at: string | null; last_event_at: string | null;
+  top_events: { name: string; count: number }[];
+}
 export interface BreakdownRow { value: string; visitors: number; pageviews: number; revenue: number }
 export interface Anomaly { date: string; metric: string; value: number; expected: number; z_score: number; direction: string }
 export interface AskResult { answer: string; data: Record<string, unknown>[]; chart: { type: string; x_key: string; y_key: string; title: string } | null }
@@ -108,4 +113,8 @@ export const api = {
     reqWrite('/api/v1/digest/settings', { method: 'PUT', body: JSON.stringify(s) }),
   digestPreview: () => req<{ subject: string; body: string }>('/api/v1/digest/preview', { method: 'POST' }),
   sendDigestNow: () => reqWrite<{ sent: number; failed: number }>('/api/v1/digest/send', { method: 'POST' }),
+  dataSummary: (projectId: string) =>
+    req<DataSummary>(`/api/v1/projects/${projectId}/data/summary`),
+  deleteAllData: (projectId: string) =>
+    reqWrite<{ ok: boolean; deleted: Record<string, number> }>(`/api/v1/projects/${projectId}/data`, { method: 'DELETE' }),
 };

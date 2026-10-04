@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.core.config import get_settings
 from app.core.database import init_db
-from app.routers import alerts, ask, digest, funnels, ingest, projects, query
+from app.routers import alerts, ask, digest, funnels, ingest, privacy, projects, query
 
 
 @asynccontextmanager
@@ -59,7 +59,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    for r in (projects.router, ingest.router, query.router, funnels.router, ask.router, alerts.router, digest.router):
+    for r in (projects.router, ingest.router, query.router, funnels.router, ask.router, alerts.router, digest.router, privacy.router):
         app.include_router(r)
 
     # Serve the built tracker snippet so the Settings page snippet URL works out of the box.

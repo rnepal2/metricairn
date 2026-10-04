@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bot, ArrowRight, AlertTriangle, TrendingUp, FileText, Filter, Check, X, Sparkles, KeyRound } from 'lucide-react';
+import { Bot, ArrowRight, AlertTriangle, TrendingUp, FileText, Filter, Check, X, Sparkles, KeyRound, Code2 } from 'lucide-react';
 import { DEMO_READ_KEY, DEMO_FALLBACK as F, DEMO_TRANSCRIPT } from '@/lib/demo';
 import { useApp } from '@/lib/store';
 import { setReadKey, api } from '@/lib/api';
@@ -46,6 +46,15 @@ function Advantage({ children }: { children: React.ReactNode }) {
     <div className="flex gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
       <Check className="h-5 w-5 shrink-0 text-emerald-600" />
       <p className="text-sm leading-relaxed text-emerald-900"><span className="font-semibold">The advantage: </span>{children}</p>
+    </div>
+  );
+}
+
+function PoweredBy({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex gap-2.5 rounded-xl border border-slate-200 bg-white p-4">
+      <Code2 className="h-4 w-4 shrink-0 text-slate-400" />
+      <p className="text-xs leading-relaxed text-slate-500"><span className="font-semibold text-slate-700">Powered by: </span>{children}</p>
     </div>
   );
 }
@@ -142,6 +151,12 @@ export function Demo() {
             <strong>90 seconds</strong> instead of an afternoon in GA4 segments. Maya shipped the fix
             before lunch and stopped a {fmtMoney(F.monthly_leak)}/mo leak.
           </Advantage>
+          <PoweredBy>
+            Two lines in her checkout handler firing <code className="font-mono">revenue</code> events
+            with <code className="font-mono">revenue_amount</code> — plus the timeline note her agent
+            wrote when she rotated the Stripe key. No Stripe OAuth, no database access: AgentLens only
+            ever sees what Maya sends it.
+          </PoweredBy>
         </div>
       </section>
 
@@ -179,6 +194,11 @@ export function Demo() {
             biggest launch ever on attributed revenue. Maya stopped guessing what to write and
             doubled down on templates — the kind of answer Plausible and Fathom don't give you.
           </Advantage>
+          <PoweredBy>
+            The 2.3KB tracker persisting landing UTMs for the whole session — every event carries{' '}
+            <code className="font-mono">utm_campaign</code>, so even clean checkout URLs credit the
+            content that started the visit. One snippet, zero configuration.
+          </PoweredBy>
         </div>
       </section>
 
@@ -219,6 +239,11 @@ export function Demo() {
             <strong>"which step leaks most on mobile?"</strong> is one question away, in the tool
             she already works in.
           </Advantage>
+          <PoweredBy>
+            The <code className="font-mono">Signup → Paid</code> funnel Maya defined in one minute,
+            fed by <code className="font-mono">signup</code> events from the tracker. The agent reads
+            the same funnel definition — no per-customer tuning, because there is no per-customer schema.
+          </PoweredBy>
         </div>
       </section>
 
