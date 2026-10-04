@@ -13,6 +13,7 @@ from collections.abc import Callable
 
 from app.models import Event
 from app.services import llm
+from app.services import sql_sandbox, sql_validate
 
 LlmFn = Callable[[str, str], "str | None"]
 
@@ -154,3 +155,43 @@ def _template_narrate(question: str, columns: list[str], rows: list[tuple]) -> s
         return f"No data matched '{question}' in this period."
     n = len(rows)
     return f"Based on the data ({n} row{'s' if n != 1 else ''}):\n{_format_rows(columns, rows)}"
+
+def answer_agentic(db, project_id: str, question: str, start, end,
+                   llm_fn: LlmFn | None = None) -> dict:
+    """Full agentic path: generate SQL → validate → execute → assess →
+    narrate. Returns {"ok": True, ...} on success; {"ok": False, "reason": ...}
+    when anything fails — the router turns that into an honest fallback,
+    never a fabricated answer."""
+    dialect = db.get_bind().dialect.name
+    sql = generate_sql(question, project_id, start, end, dialect, llm_fn=llm_fn)
+    if not sql:
+        return {"ok": False, "planner": "agentic_sql",
+                "reason": "couldn't formulate a SQL query for this question"}
+
+    assessment = sql_validate.assess(question, sql, project_id)
+    if not assessment["ok"]:
+        return {"ok": False, "planner": "agentic_sql", "sql": sql,
+                "reason": f"generated SQL failed validation: {'; '.join(assessment['issues'])}"}
+
+    exec_result = sql_sandbox.execute(db, sql)
+    if not exec_result["ok"]:
+        return {"ok": False, "planner": "agentic_sql", "sql": sql,
+                "reason": f"query failed: {exec_result['reason']}"}
+
+    final = sql_validate.assess_result(assessment, exec_result)
+    if final["confidence"] < sql_validate.confidence_threshold():
+        return {"ok": False, "planner": "agentic_sql", "sql": sql,
+                "reason": (f"low confidence ({final['confidence']:.2f}): "
+                           f"{'; '.join(final['issues']) or 'no specific issue'}")}
+
+    answer = narrate(question, exec_result["columns"], exec_result["rows"], llm_fn=llm_fn)
+    return {
+        "ok": True,
+        "planner": "agentic_sql",
+        "answer": answer,
+        "sql": sql,
+        "columns": exec_result["columns"],
+        "rows": [dict(zip(exec_result["columns"], r)) for r in exec_result["rows"]],
+        "confidence": final["confidence"],
+        "validation_notes": final["issues"],
+    }
