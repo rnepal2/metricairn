@@ -179,3 +179,10 @@ def test_ask_endpoint(db, project):
     body = r.json()
     assert "pricing" in body["answer"]
     assert body["chart"]["type"] == "bar"
+
+
+def test_ingest_ping_no_auth(db, project):
+    client = _client(db)
+    r = client.get("/api/v1/ingest/ping")
+    assert r.status_code == 200
+    assert r.json()["ok"] is True

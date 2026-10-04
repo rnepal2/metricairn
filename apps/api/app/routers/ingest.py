@@ -10,6 +10,14 @@ from app.schemas import IngestBatch, IngestResult
 
 router = APIRouter(prefix="/api/v1/ingest", tags=["ingest"])
 
+
+@router.get("/ping")
+def ping():
+    """No-auth reachability check. Proxy your domain's /al/* to /api/v1/*, then
+    `curl https://your-domain/al/ingest/ping` — a 200 here proves the proxy
+    path works before you touch the snippet."""
+    return {"ok": True, "service": "agentlens-ingest", "version": "0.1.0"}
+
 BOT_HINTS = ("bot", "crawler", "spider", "headless", "lighthouse", "pingdom")
 
 

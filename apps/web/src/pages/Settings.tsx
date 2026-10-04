@@ -81,12 +81,22 @@ export function Settings() {
             <TabsList>
               <TabsTrigger value="snippet">HTML snippet</TabsTrigger>
               <TabsTrigger value="npm">npm package</TabsTrigger>
+              <TabsTrigger value="proxy">First-party proxy</TabsTrigger>
             </TabsList>
             <TabsContent value="snippet">
               <CodeBlock label="Paste into <head>" code={snippet} />
             </TabsContent>
             <TabsContent value="npm">
               <CodeBlock label="Install the tracker package" code={`npm install @agentlens/tracker\n\nimport { agentlens, configure } from '@agentlens/tracker';\nconfigure({ api: '${apiBase}/api/v1/ingest', key: 'alw_YOUR_WRITE_KEY' });\nagentlens.event('signup');`} />
+            </TabsContent>
+            <TabsContent value="proxy">
+              <CodeBlock label="Snippet (first-party paths)" code={`<script defer src="https://YOUR-DOMAIN/al/script.js"\n  data-api="https://YOUR-DOMAIN/al/ingest"\n  data-key="alw_YOUR_WRITE_KEY"></script>`} />
+              <CodeBlock label="nginx" code={`location = /al/script.js {\n    proxy_pass ${apiBase}/static/agentlens.js;\n}\nlocation /al/ {\n    proxy_pass ${apiBase}/api/v1/;\n}`} />
+              <p className="mt-2 text-xs text-slate-500">
+                Serve the tracker from your own domain so ad-blockers can't tell it apart from your API — recovers the 20–50% of events blockers eat.
+                Verify with <code className="rounded bg-slate-100 px-1 font-mono">curl https://YOUR-DOMAIN/al/ingest/ping</code> (expect <code className="font-mono">{'{"ok":true}'}</code>).
+                Full configs for Caddy, Next.js, Vercel, Cloudflare Workers: <code className="font-mono">docs/first-party-proxy.md</code>.
+              </p>
             </TabsContent>
           </Tabs>
           <p className="mt-3 text-xs text-slate-500">
