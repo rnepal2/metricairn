@@ -64,7 +64,7 @@ export interface DataSummary {
 }
 export interface BreakdownRow { value: string; visitors: number; pageviews: number; revenue: number }
 export interface Anomaly { date: string; metric: string; value: number; expected: number; z_score: number; direction: string }
-export interface AskResult { answer: string; data: Record<string, unknown>[]; chart: { type: string; x_key: string; y_key: string; title: string } | null; planner?: string; coverage_notes?: string[] }
+export interface AskResult { answer: string; data: Record<string, unknown>[]; chart: { type: string; x_key: string; y_key: string; title: string } | null; planner?: string; coverage_notes?: string[]; based_on?: { events: number; event_names: string[]; date_range: { from: string; to: string } } }
 export interface HealthCheck { key: string; label: string; status: 'ok' | 'warning' | 'missing'; detail: string }
 export interface IntegrationHealth { project_id: string; checks: HealthCheck[]; missing: string[] }
 export interface FunnelStepReport { step: { kind: string; value: string }; visitors: number; conversion_from_start: number; conversion_from_prev: number }

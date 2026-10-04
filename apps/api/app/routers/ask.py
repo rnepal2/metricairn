@@ -32,12 +32,13 @@ def ask(body: AskRequest, key: ApiKey = Depends(require_read_key), db: Session =
     action = plan.get("action", "overview")
     answer, data, chart = _execute(db, project_id, action, plan, start, end)
     notes = coverage.coverage_notes(db, project_id, action, start, end)
+    provenance = coverage.based_on(db, project_id, start, end)
 
     # Observe our own agent usage (direction-2 analytics).
     db.add(Event(project_id=project_id, name="ask", props={"question": body.question, "planner": planner, "action": action}))
     db.commit()
 
-    return AskOut(answer=answer, data=data, chart=chart, planner=planner, coverage_notes=notes)
+    return AskOut(answer=answer, data=data, chart=chart, planner=planner, coverage_notes=notes, based_on=provenance)
 
 
 def _execute(db: Session, project_id: str, action: str, plan: dict, start, end):

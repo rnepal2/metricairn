@@ -117,6 +117,7 @@ class AskOut(BaseModel):
     sql_hint: str | None = None
     planner: str = "heuristic"  # heuristic | llm — transparency about how the question was planned
     coverage_notes: list[str] = Field(default_factory=list)  # what the answer couldn't see
+    based_on: dict = Field(default_factory=dict)  # {events, event_names, date_range} — what backed the answer
 
 
 class NoteCreate(BaseModel):

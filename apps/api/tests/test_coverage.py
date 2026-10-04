@@ -120,3 +120,30 @@ def test_ask_empty_range_warns():
                                "date_from": "2020-01-01", "date_to": "2020-01-31"})
     assert r.status_code == 200, r.text
     assert any("no events at all" in n.lower() for n in r.json()["coverage_notes"])
+
+
+def test_ask_based_on_footer():
+    db = _fresh_db()
+    p = _project(db)
+    _event(db, p.id, "pageview")
+    _event(db, p.id, "revenue", revenue_amount=49.0)
+    _event(db, p.id, "signup")
+    r = _client(db).post("/api/v1/ask", headers=R,
+                         json={"question": "how many visitors?"})
+    assert r.status_code == 200, r.text
+    based = r.json()["based_on"]
+    assert based["events"] == 3
+    assert sorted(based["event_names"]) == ["pageview", "revenue", "signup"]
+    assert based["date_range"]["from"] <= based["date_range"]["to"]
+
+
+def test_ask_based_on_excludes_system_ask_events():
+    db = _fresh_db()
+    p = _project(db)
+    _event(db, p.id, "pageview")
+    c = _client(db)
+    c.post("/api/v1/ask", headers=R, json={"question": "how many visitors?"})
+    r = c.post("/api/v1/ask", headers=R, json={"question": "how many visitors?"})
+    based = r.json()["based_on"]
+    assert based["events"] == 1  # the earlier ask event must not inflate the count
+    assert "ask" not in based["event_names"]

@@ -145,3 +145,26 @@ def coverage_notes(db, project_id, action: str, start, end) -> list[str]:
                 "notes (log deploys via MCP add_note or Settings)."
             )
     return notes
+
+def based_on(db, project_id, start, end) -> dict:
+    """Structured provenance for an ask answer: how much data backed it.
+
+    Every answer carries this footer so a founder (or their agent) can tell
+    'answered from 12,000 events' apart from 'answered from 3 events'.
+    System events (ask logs) are excluded — they aren't customer data.
+    """
+    base = (
+        db.query(Event)
+        .filter(
+            Event.project_id == project_id,
+            Event.created_at >= start,
+            Event.created_at <= end,
+            Event.name.notin_(_SYSTEM_EVENTS),
+        )
+    )
+    names = sorted(r[0] for r in base.with_entities(Event.name).distinct().limit(25).all())
+    return {
+        "events": base.count(),
+        "event_names": names,
+        "date_range": {"from": start.date().isoformat(), "to": end.date().isoformat()},
+    }

@@ -93,6 +93,14 @@ export function Ask() {
             <p className="mt-4 text-[11px] text-slate-400">
               The same questions work from your AI agent via the AgentLens MCP server — see Settings.
             </p>
+            {result.based_on && result.based_on.events !== undefined && (
+              <p className="mt-1 text-[11px] text-slate-400">
+                Based on <strong>{result.based_on.events.toLocaleString()} events</strong>
+                {result.based_on.event_names?.length > 0 && ` (${result.based_on.event_names.join(', ')})`}
+                {' '}· {result.based_on.date_range?.from} → {result.based_on.date_range?.to}
+                {result.planner && ` · planned by ${result.planner}`}
+              </p>
+            )}
           </CardContent>
         </Card>
       )}
