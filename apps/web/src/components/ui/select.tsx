@@ -14,7 +14,7 @@ const SelectTrigger = React.forwardRef<
     ref={ref}
     className={cn(
       'flex h-9 w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:cursor-not-allowed disabled:opacity-50',
-      className
+      className,
     )}
     {...props}
   >
@@ -36,7 +36,7 @@ const SelectContent = React.forwardRef<
       className={cn(
         'relative z-50 min-w-[8rem] overflow-hidden rounded-md border border-slate-200 bg-white text-slate-900 shadow-md',
         position === 'popper' && 'translate-y-1',
-        className
+        className,
       )}
       position={position}
       {...props}
@@ -55,7 +55,7 @@ const SelectItem = React.forwardRef<
     ref={ref}
     className={cn(
       'relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none focus:bg-slate-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
-      className
+      className,
     )}
     {...props}
   >

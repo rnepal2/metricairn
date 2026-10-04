@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import ApiKey, require_read_key, require_write_key
+from app.core.security import ApiKey, require_management_key, require_read_key
 from app.models import AlertChannel, AlertDelivery, AlertRule
 from app.schemas import (
     AlertChannelCreate,
@@ -33,7 +33,7 @@ def _channel_out(c: AlertChannel) -> dict:
 @router.post("/channels", response_model=AlertChannelOut)
 def create_channel(
     body: AlertChannelCreate,
-    key: ApiKey = Depends(require_write_key),
+    key: ApiKey = Depends(require_management_key),
     db: Session = Depends(get_db),
 ):
     if body.kind == "email" and "@" not in body.target:
@@ -61,7 +61,7 @@ def list_channels(key: ApiKey = Depends(require_read_key), db: Session = Depends
 @router.delete("/channels/{channel_id}")
 def delete_channel(
     channel_id: str,
-    key: ApiKey = Depends(require_write_key),
+    key: ApiKey = Depends(require_management_key),
     db: Session = Depends(get_db),
 ):
     c = (
@@ -79,7 +79,7 @@ def delete_channel(
 @router.post("/channels/{channel_id}/test")
 def test_channel(
     channel_id: str,
-    key: ApiKey = Depends(require_write_key),
+    key: ApiKey = Depends(require_management_key),
     db: Session = Depends(get_db),
 ):
     c = (
@@ -98,7 +98,7 @@ def test_channel(
 @router.post("/rules", response_model=AlertRuleOut)
 def create_rule(
     body: AlertRuleCreate,
-    key: ApiKey = Depends(require_write_key),
+    key: ApiKey = Depends(require_management_key),
     db: Session = Depends(get_db),
 ):
     r = AlertRule(
@@ -113,9 +113,14 @@ def create_rule(
     db.commit()
     db.refresh(r)
     return {
-        "id": r.id, "name": r.name, "metric": r.metric, "direction": r.direction,
-        "min_z": r.min_z, "cooldown_hours": r.cooldown_hours,
-        "enabled": r.enabled, "created_at": r.created_at,
+        "id": r.id,
+        "name": r.name,
+        "metric": r.metric,
+        "direction": r.direction,
+        "min_z": r.min_z,
+        "cooldown_hours": r.cooldown_hours,
+        "enabled": r.enabled,
+        "created_at": r.created_at,
     }
 
 
@@ -129,9 +134,14 @@ def list_rules(key: ApiKey = Depends(require_read_key), db: Session = Depends(ge
     )
     return [
         {
-            "id": r.id, "name": r.name, "metric": r.metric, "direction": r.direction,
-            "min_z": r.min_z, "cooldown_hours": r.cooldown_hours,
-            "enabled": r.enabled, "created_at": r.created_at,
+            "id": r.id,
+            "name": r.name,
+            "metric": r.metric,
+            "direction": r.direction,
+            "min_z": r.min_z,
+            "cooldown_hours": r.cooldown_hours,
+            "enabled": r.enabled,
+            "created_at": r.created_at,
         }
         for r in rules
     ]
@@ -140,7 +150,7 @@ def list_rules(key: ApiKey = Depends(require_read_key), db: Session = Depends(ge
 @router.delete("/rules/{rule_id}")
 def delete_rule(
     rule_id: str,
-    key: ApiKey = Depends(require_write_key),
+    key: ApiKey = Depends(require_management_key),
     db: Session = Depends(get_db),
 ):
     r = (
@@ -170,8 +180,12 @@ def list_deliveries(
     )
     return [
         {
-            "id": d.id, "channel_id": d.channel_id, "rule_id": d.rule_id,
-            "anomaly_key": d.anomaly_key, "status": d.status, "detail": d.detail,
+            "id": d.id,
+            "channel_id": d.channel_id,
+            "rule_id": d.rule_id,
+            "anomaly_key": d.anomaly_key,
+            "status": d.status,
+            "detail": d.detail,
             "created_at": d.created_at,
         }
         for d in rows
@@ -179,7 +193,7 @@ def list_deliveries(
 
 
 @router.post("/check")
-def run_check(key: ApiKey = Depends(require_write_key), db: Session = Depends(get_db)):
+def run_check(key: ApiKey = Depends(require_management_key), db: Session = Depends(get_db)):
     """Manually trigger one alert cycle for the key's project (same logic the
     scheduler runs every 30 minutes)."""
     return alerting.check_project(db, key.project_id)

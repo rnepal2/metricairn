@@ -1,15 +1,25 @@
 {
-  "description": "AgentLens tracking snippet \u2014 privacy-friendly, cookieless, <4KB",
+  "description": "Metricairn browser tracking snippet; no cookies, browser-local random IDs",
   "devDependencies": {
     "tsup": "^8.3.0",
     "typescript": "^5.6.0"
   },
-  "main": "./dist/agentlens.js",
-  "name": "@agentlens/tracker",
+  "main": "./dist/metricairn.js",
+  "name": "@metricairn/tracker",
   "scripts": {
-    "build": "tsup src/tracker.ts --format iife --global-name agentlens --minify --out-dir dist && mv dist/tracker.global.js dist/agentlens.js",
-    "dev": "tsup src/tracker.ts --format iife --global-name agentlens --watch --out-dir dist --outExtension '.js'"
+    "build": "tsup src/tracker.ts --format iife --global-name metricairn --minify --out-dir dist && mv dist/tracker.global.js dist/metricairn.js",
+    "dev": "tsup src/tracker.ts --format iife --watch --out-dir dist --onSuccess 'mv dist/tracker.global.js dist/metricairn.js'",
+    "test": "npm run build && node --test tests/*.test.cjs"
   },
   "type": "module",
-  "version": "0.1.0"
+  "version": "0.1.0",
+  "private": true,
+  "overrides": {
+    "esbuild": "^0.28.2"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rnepal2/metricairn.git"
+  }
 }

@@ -1,0 +1,14 @@
+.git
+**/.venv
+**/node_modules
+**/dist
+**/__pycache__
+**/data
+**/.pytest_cache
+test-results
+.env
+.env.*
+
+**/*.tsbuildinfo
+output
+**/.ruff_cache

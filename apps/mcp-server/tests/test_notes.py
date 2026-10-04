@@ -9,7 +9,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from agentlens_mcp import client as client_mod
+from metricairn_mcp import client as client_mod
 
 
 class FakeHTTP:
@@ -21,7 +21,11 @@ class FakeHTTP:
 
     def get(self, url, params=None, headers=None):
         self.gets.append(url)
-        return FakeResp({"project_id": "p123", "name": "Acme", "domain": "acme.test"} if url.endswith("/me") else [])
+        return FakeResp(
+            {"project_id": "p123", "name": "Acme", "domain": "acme.test"}
+            if url.endswith("/me")
+            else []
+        )
 
     def post(self, url, json=None, headers=None, timeout=None):
         self.posts.append((url, json))
@@ -41,7 +45,9 @@ class FakeResp:
 
 @pytest.fixture()
 def api_client(monkeypatch):
-    c = client_mod.AgentLensClient(api_url="http://x", read_key="alr_t", write_key="")
+    c = client_mod.MetricairnClient(
+        api_url="http://x", read_key="alr_t", write_key="", management_key="alm_t"
+    )
     fake = FakeHTTP()
     c._http = fake
     c._fake = fake
@@ -82,18 +88,18 @@ def test_list_notes(api_client):
 
 
 def _load_server(note_write: str):
-    """Import server.py fresh with AGENTLENS_ENABLE_NOTE_WRITE controlled."""
-    import agentlens_mcp.server as srv
+    """Import server.py fresh with METRICAIRN_ENABLE_NOTE_WRITE controlled."""
+    import metricairn_mcp.server as srv
 
-    old = os.environ.get("AGENTLENS_ENABLE_NOTE_WRITE")
-    os.environ["AGENTLENS_ENABLE_NOTE_WRITE"] = note_write
+    old = os.environ.get("METRICAIRN_ENABLE_NOTE_WRITE")
+    os.environ["METRICAIRN_ENABLE_NOTE_WRITE"] = note_write
     try:
         return importlib.reload(srv)
     finally:
         if old is None:
-            os.environ.pop("AGENTLENS_ENABLE_NOTE_WRITE", None)
+            os.environ.pop("METRICAIRN_ENABLE_NOTE_WRITE", None)
         else:
-            os.environ["AGENTLENS_ENABLE_NOTE_WRITE"] = old
+            os.environ["METRICAIRN_ENABLE_NOTE_WRITE"] = old
 
 
 def _tool_names(srv):

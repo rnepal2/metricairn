@@ -25,9 +25,15 @@ class Project(Base):
     domain: Mapped[str] = mapped_column(String(300), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
-    keys: Mapped[list["ApiKey"]] = relationship(back_populates="project", cascade="all, delete-orphan")
-    events: Mapped[list["Event"]] = relationship(back_populates="project", cascade="all, delete-orphan")
-    funnels: Mapped[list["Funnel"]] = relationship(back_populates="project", cascade="all, delete-orphan")
+    keys: Mapped[list["ApiKey"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
+    events: Mapped[list["Event"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
+    funnels: Mapped[list["Funnel"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
 
 
 class ApiKey(Base):
@@ -38,7 +44,7 @@ class ApiKey(Base):
     key_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     key_prefix: Mapped[str] = mapped_column(String(12))
     name: Mapped[str] = mapped_column(String(200), default="")
-    scopes: Mapped[str] = mapped_column(String(50), default="read")  # csv: read,write
+    scopes: Mapped[str] = mapped_column(String(50), default="read")  # csv: read,write,manage
     revoked: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
@@ -52,14 +58,21 @@ class Event(Base):
     __tablename__ = "events"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
-    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    event_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     session_id: Mapped[str] = mapped_column(String(64), index=True, default="")
     visitor_id: Mapped[str] = mapped_column(String(64), index=True, default="")
     # Optional identity: set when the customer identifies the user server-side
     # (e.g. account id hash). Nullable — most customers won't send it.
-    user_id: Mapped[str | None] = mapped_column(String(128), index=True, nullable=True, default=None)
+    user_id: Mapped[str | None] = mapped_column(
+        String(128), index=True, nullable=True, default=None
+    )
     # Optional B2B scope: company/account id for account-level analytics.
-    group_id: Mapped[str | None] = mapped_column(String(128), index=True, nullable=True, default=None)
+    group_id: Mapped[str | None] = mapped_column(
+        String(128), index=True, nullable=True, default=None
+    )
     name: Mapped[str] = mapped_column(String(200), index=True)
     path: Mapped[str] = mapped_column(String(1000), default="")
     url: Mapped[str] = mapped_column(String(2000), default="")
@@ -79,6 +92,7 @@ class Event(Base):
     project: Mapped[Project] = relationship(back_populates="events")
 
     __table_args__ = (
+        Index("uq_events_project_event", "project_id", "event_id", unique=True),
         Index("ix_events_project_created", "project_id", "created_at"),
         Index("ix_events_project_name", "project_id", "name"),
     )
@@ -88,7 +102,9 @@ class Funnel(Base):
     __tablename__ = "funnels"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
-    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
     name: Mapped[str] = mapped_column(String(200))
     # steps: [{"kind": "page"|"event", "value": "/pricing" | "signup"}]
     steps: Mapped[list] = mapped_column(JSON, default=list)
@@ -103,19 +119,52 @@ class Note(Base):
     __tablename__ = "notes"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
-    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
     text: Mapped[str] = mapped_column(Text, default="")
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
+class Goal(Base):
+    __tablename__ = "goals"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(200))
+    event_name: Mapped[str] = mapped_column(String(200))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class Investigation(Base):
+    """Immutable evidence, with a separate human review decision."""
+
+    __tablename__ = "investigations"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    title: Mapped[str] = mapped_column(String(200))
+    evidence: Mapped[dict] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(30), default="observed")
+    review_note: Mapped[str] = mapped_column(Text, default="")
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
 class AlertChannel(Base):
     """Where anomaly alerts go: email address or Slack webhook. Managed by the
-    founder with a write key; the scheduler delivers to every enabled channel."""
+    founder with a private management key; the scheduler delivers to every enabled channel."""
 
     __tablename__ = "alert_channels"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
-    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
     kind: Mapped[str] = mapped_column(String(20))  # 'email' | 'slack'
     target: Mapped[str] = mapped_column(String(500))  # address or webhook URL
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -130,7 +179,9 @@ class AlertRule(Base):
     __tablename__ = "alert_rules"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
-    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
     name: Mapped[str] = mapped_column(String(200), default="")
     metric: Mapped[str] = mapped_column(String(20), default="any")  # 'revenue'|'pageviews'|'any'
     direction: Mapped[str] = mapped_column(String(20), default="any")  # 'dip'|'spike'|'any'
@@ -147,10 +198,14 @@ class AlertDelivery(Base):
     __tablename__ = "alert_deliveries"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
-    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
     channel_id: Mapped[str] = mapped_column(String(32), default="")
     rule_id: Mapped[str] = mapped_column(String(32), default="")
-    anomaly_key: Mapped[str] = mapped_column(String(200), index=True)  # metric:direction:date[:date_end]
+    anomaly_key: Mapped[str] = mapped_column(
+        String(200), index=True
+    )  # metric:direction:date[:date_end]
     status: Mapped[str] = mapped_column(String(20))  # 'sent'|'failed'|'skipped'
     detail: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
@@ -164,9 +219,13 @@ class DigestSetting(Base):
     __tablename__ = "digest_settings"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
-    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True, unique=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True, unique=True
+    )
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     weekday: Mapped[int] = mapped_column(default=0)  # 0=Monday … 6=Sunday (UTC)
     hour_utc: Mapped[int] = mapped_column(default=12)  # 12:00 UTC ≈ 7–8am US Eastern
-    last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
+    last_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

@@ -17,7 +17,15 @@ export function fmtPct(r: number | undefined | null): string {
 
 export function fmtMoney(n: number | undefined | null, currency = 'USD'): string {
   if (n == null || Number.isNaN(n)) return '—'
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(n)
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: 2,
+    }).format(n)
+  } catch {
+    return `${fmtNum(n)} ${currency}`
+  }
 }
 
 export function fmtDate(iso: string): string {

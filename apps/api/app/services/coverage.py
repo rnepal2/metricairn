@@ -11,8 +11,8 @@ from sqlalchemy import func
 
 from app.models import Event, Funnel, Note
 
-# Event names written by AgentLens itself — not customer instrumentation.
-_SYSTEM_EVENTS = ["ask"]
+# Event names written by Metricairn itself — not customer instrumentation.
+_SYSTEM_EVENTS = ["ask", "mcp_tool_call"]
 
 
 def _count(db, project_id, name=None, since=None, before=None, exclude_system=False):
@@ -24,7 +24,7 @@ def _count(db, project_id, name=None, since=None, before=None, exclude_system=Fa
     if since is not None:
         q = q.filter(Event.created_at >= since)
     if before is not None:
-        q = q.filter(Event.created_at <= before)
+        q = q.filter(Event.created_at < before)
     return q.scalar() or 0
 
 
@@ -41,7 +41,9 @@ def health(db, project_id) -> dict:
     funnels = db.query(func.count(Funnel.id)).filter(Funnel.project_id == project_id).scalar() or 0
     notes = db.query(func.count(Note.id)).filter(Note.project_id == project_id).scalar() or 0
     last_event = (
-        db.query(func.max(Event.created_at)).filter(Event.project_id == project_id).scalar()
+        db.query(func.max(Event.created_at))
+        .filter(Event.project_id == project_id, Event.name.notin_(_SYSTEM_EVENTS))
+        .scalar()
     )
     if last_event is not None and last_event.tzinfo is None:
         # SQLite returns naive datetimes; treat stored times as UTC.
@@ -52,13 +54,17 @@ def health(db, project_id) -> dict:
             "key": "tracker",
             "label": "Browser tracker sending pageviews",
             "status": "ok" if pageviews > 0 else "missing",
-            "detail": f"{pageviews:,} pageviews in the last 7 days" if pageviews else "No pageviews in 7 days — is the snippet installed?",
+            "detail": f"{pageviews:,} pageviews in the last 7 days"
+            if pageviews
+            else "No pageviews in 7 days — is the snippet installed?",
         },
         {
             "key": "revenue",
             "label": "Server-side revenue events",
             "status": "ok" if revenue > 0 else "missing",
-            "detail": f"{revenue:,} revenue events in the last 7 days" if revenue else (
+            "detail": f"{revenue:,} revenue events in the last 7 days"
+            if revenue
+            else (
                 "No revenue events — every revenue answer depends on these "
                 "(Settings → Installation → Server events, or the Stripe webhook)."
             ),
@@ -67,25 +73,35 @@ def health(db, project_id) -> dict:
             "key": "custom_events",
             "label": "Custom events (signup, etc.)",
             "status": "ok" if custom > 0 else "warning",
-            "detail": f"{custom:,} custom events in the last 7 days" if custom else "No custom events yet — funnels and conversion answers need them.",
+            "detail": f"{custom:,} custom events in the last 7 days"
+            if custom
+            else "No custom events yet — funnels and conversion answers need them.",
         },
         {
             "key": "funnels",
             "label": "Funnels defined",
             "status": "ok" if funnels > 0 else "warning",
-            "detail": f"{funnels} funnel(s) defined" if funnels else "No funnels yet — define one under Funnels.",
+            "detail": f"{funnels} funnel(s) defined"
+            if funnels
+            else "No funnels yet — define one under Funnels.",
         },
         {
             "key": "live",
             "label": "Receiving live data",
-            "status": "ok" if last_event and last_event >= day_ago else ("warning" if last_event else "missing"),
-            "detail": f"Last event {last_event.isoformat()}" if last_event else "No events ever received.",
+            "status": "ok"
+            if last_event and last_event >= day_ago
+            else ("warning" if last_event else "missing"),
+            "detail": f"Last event {last_event.isoformat()}"
+            if last_event
+            else "No events ever received.",
         },
         {
             "key": "notes",
             "label": "Timeline notes",
             "status": "ok" if notes > 0 else "warning",
-            "detail": f"{notes} note(s) on the timeline" if notes else "No notes — they make 'why' answers dramatically better.",
+            "detail": f"{notes} note(s) on the timeline"
+            if notes
+            else "No notes — they make 'why' answers dramatically better.",
         },
     ]
     missing = [c["key"] for c in checks if c["status"] == "missing"]
@@ -99,7 +115,7 @@ def coverage_notes(db, project_id, action: str, start, end) -> list[str]:
     a confident-sounding answer built on absent data.
     """
     notes: list[str] = []
-    total = _count(db, project_id, since=start, before=end)
+    total = _count(db, project_id, since=start, before=end, exclude_system=True)
     if total == 0:
         return [
             "No events at all in this period — check the tracker snippet is installed "
@@ -112,7 +128,7 @@ def coverage_notes(db, project_id, action: str, start, end) -> list[str]:
             Event.project_id == project_id,
             Event.name == "revenue",
             Event.created_at >= start,
-            Event.created_at <= end,
+            Event.created_at < end,
         )
         .scalar()
         or 0
@@ -121,7 +137,7 @@ def coverage_notes(db, project_id, action: str, start, end) -> list[str]:
         notes.append(
             "No revenue events in this period — revenue answers need the server-side "
             "revenue snippet or Stripe webhook (see docs/trust-and-data.md). "
-            "Totals above are $0 because nothing was sent, not because revenue was zero."
+            "Recorded totals are zero because nothing was sent; actual revenue is unknown."
         )
     if action == "anomalies" and revenue_in_range == 0:
         notes.append(
@@ -134,7 +150,7 @@ def coverage_notes(db, project_id, action: str, start, end) -> list[str]:
             .filter(
                 Note.project_id == project_id,
                 Note.at >= start,
-                Note.at <= end,
+                Note.at < end,
             )
             .scalar()
             or 0
@@ -144,7 +160,17 @@ def coverage_notes(db, project_id, action: str, start, end) -> list[str]:
                 "No timeline notes in this period — 'why' answers are much better with "
                 "notes (log deploys via MCP add_note or Settings)."
             )
+    from app.services.analytics import revenue_currencies
+
+    currencies = revenue_currencies(db, project_id, start, end)
+    if len(currencies) > 1:
+        notes.append(
+            "Multiple currencies received: "
+            + ", ".join(currencies)
+            + ". Totals use the selected currency only; no FX conversion is performed."
+        )
     return notes
+
 
 def based_on(db, project_id, start, end) -> dict:
     """Structured provenance for an ask answer: how much data backed it.
@@ -153,18 +179,16 @@ def based_on(db, project_id, start, end) -> dict:
     'answered from 12,000 events' apart from 'answered from 3 events'.
     System events (ask logs) are excluded — they aren't customer data.
     """
-    base = (
-        db.query(Event)
-        .filter(
-            Event.project_id == project_id,
-            Event.created_at >= start,
-            Event.created_at <= end,
-            Event.name.notin_(_SYSTEM_EVENTS),
-        )
+    base = db.query(Event).filter(
+        Event.project_id == project_id,
+        Event.created_at >= start,
+        Event.created_at < end,
+        Event.name.notin_(_SYSTEM_EVENTS),
     )
     names = sorted(r[0] for r in base.with_entities(Event.name).distinct().limit(25).all())
     return {
         "events": base.count(),
         "event_names": names,
-        "date_range": {"from": start.date().isoformat(), "to": end.date().isoformat()},
+        "window_semantics": "UTC [from, to); end exclusive",
+        "date_range": {"from": start.isoformat(), "to": end.isoformat()},
     }

@@ -8,6 +8,6 @@ export default defineConfig({
   resolve: { alias: { '@': path.resolve(__dirname, './src') } },
   server: {
     port: 5173,
-    proxy: { '/api': 'http://localhost:8000', '/health': 'http://localhost:8000' },
+    proxy: { '/api': process.env.METRICAIRN_API_URL || 'http://localhost:8000', '/health': process.env.METRICAIRN_API_URL || 'http://localhost:8000', '/static': process.env.METRICAIRN_API_URL || 'http://localhost:8000' },
   },
 })

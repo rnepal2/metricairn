@@ -3,15 +3,14 @@
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
 from app.core.database import Base, get_db
+from app.core.security import _hash
 from app.main import create_app
 from app.models import ApiKey, Event, Project
 from app.services import analytics, anomaly, nl
-from app.core.security import _hash
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 TEST_DB = "sqlite:///./data/test.db"
 
@@ -37,8 +36,24 @@ def project(db):
     db.add(p)
     db.commit()
     db.refresh(p)
-    db.add(ApiKey(project_id=p.id, key_hash=_hash("alw_test"), key_prefix="alw_test", name="w", scopes="write"))
-    db.add(ApiKey(project_id=p.id, key_hash=_hash("alr_test"), key_prefix="alr_test", name="r", scopes="read"))
+    db.add(
+        ApiKey(
+            project_id=p.id,
+            key_hash=_hash("alw_test"),
+            key_prefix="alw_test",
+            name="w",
+            scopes="write",
+        )
+    )
+    db.add(
+        ApiKey(
+            project_id=p.id,
+            key_hash=_hash("alr_test"),
+            key_prefix="alr_test",
+            name="r",
+            scopes="read",
+        )
+    )
     db.commit()
     return p
 
@@ -65,7 +80,15 @@ def test_overview_math(db, project):
         _event(db, project.id, visitor="v1", session="s1", path=f"/p{i}")
     _event(db, project.id, visitor="v2", session="s2", path="/")
     _event(db, project.id, name="signup", visitor="v1", session="s1")
-    _event(db, project.id, name="revenue", visitor="v1", session="s1", revenue_amount=49.0, revenue_currency="USD")
+    _event(
+        db,
+        project.id,
+        name="revenue",
+        visitor="v1",
+        session="s1",
+        revenue_amount=49.0,
+        revenue_currency="USD",
+    )
 
     start = datetime.now(timezone.utc) - timedelta(days=1)
     end = datetime.now(timezone.utc) + timedelta(hours=1)
@@ -172,7 +195,16 @@ def test_ingest_and_query_endpoints(db, project):
     r = client.post(
         "/api/v1/ingest",
         headers={"X-Write-Key": "alw_test"},
-        json={"events": [{"name": "pageview", "url": "https://acme.test/?utm_source=google", "visitor_id": "v1", "session_id": "s1"}]},
+        json={
+            "events": [
+                {
+                    "name": "pageview",
+                    "url": "https://acme.test/?utm_source=google",
+                    "visitor_id": "v1",
+                    "session_id": "s1",
+                }
+            ]
+        },
     )
     assert r.status_code == 200, r.text
     assert r.json()["accepted"] == 1
@@ -181,7 +213,9 @@ def test_ingest_and_query_endpoints(db, project):
     assert r.status_code == 200
     assert r.json()["visitors"] == 1
 
-    r = client.get("/api/v1/query/breakdown?dimension=utm_source", headers={"X-Read-Key": "alr_test"})
+    r = client.get(
+        "/api/v1/query/breakdown?dimension=utm_source", headers={"X-Read-Key": "alr_test"}
+    )
     assert r.json()[0]["value"] == "google"
 
 
@@ -189,7 +223,9 @@ def test_ask_endpoint(db, project):
     _event(db, project.id, visitor="v1", session="s1", path="/pricing")
     client = _client(db)
     r = client.post(
-        "/api/v1/ask", headers={"X-Read-Key": "alr_test"}, json={"question": "what are my top pages?"}
+        "/api/v1/ask",
+        headers={"X-Read-Key": "alr_test"},
+        json={"question": "what are my top pages?"},
     )
     assert r.status_code == 200, r.text
     body = r.json()

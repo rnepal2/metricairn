@@ -1,3 +1,5 @@
+import { ExportButton } from '@/components/ExportButton'
+import { FetchError } from '@/components/FetchError'
 import { Bot, MessageSquare } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useApp } from '@/lib/store'
@@ -14,19 +16,31 @@ export function McpUsage() {
 
   return (
     <div className="space-y-4">
+      <ExportButton rows={u.data?.by_tool || []} name="metricairn-mcpusage" />
+      <FetchError error={u.error} retry={u.reload} />
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Bot className="h-4 w-4" /> Agent usage</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Bot className="h-4 w-4" /> Agent usage
+          </CardTitle>
           <CardDescription>
-            AgentLens observes its own MCP server: which tools your agents call, how often they fail,
-            and what they ask. Analytics for your agents, by your agents.
+            Metricairn observes its own MCP server: which tools your agents call, how often they
+            fail, and what they ask. Analytics for your agents, by your agents.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {u.loading ? <Skeleton className="h-24" /> : u.data ? (
+          {u.loading ? (
+            <Skeleton className="h-24" />
+          ) : u.data ? (
             <div className="grid grid-cols-2 gap-4">
-              <div><div className="text-xs text-slate-500">MCP tool calls</div><div className="text-2xl font-bold">{fmtNum(u.data.total_tool_calls)}</div></div>
-              <div><div className="text-xs text-slate-500">Questions asked</div><div className="text-2xl font-bold">{fmtNum(u.data.questions_asked)}</div></div>
+              <div>
+                <div className="text-xs text-slate-500">MCP tool calls</div>
+                <div className="text-2xl font-bold">{fmtNum(u.data.total_tool_calls)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-slate-500">Questions asked</div>
+                <div className="text-2xl font-bold">{fmtNum(u.data.questions_asked)}</div>
+              </div>
             </div>
           ) : null}
         </CardContent>
@@ -34,28 +48,46 @@ export function McpUsage() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
-          <CardHeader><CardTitle>Tool calls</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle>Tool calls</CardTitle>
+          </CardHeader>
           <CardContent>
-            {u.loading ? <Skeleton className="h-64" /> : (
-              <BarListChart data={(u.data?.by_tool || []) as unknown as Record<string, unknown>[]} xKey="tool" yKey="calls" />
+            {u.loading ? (
+              <Skeleton className="h-64" />
+            ) : (
+              <BarListChart
+                data={(u.data?.by_tool || []) as unknown as Record<string, unknown>[]}
+                xKey="tool"
+                yKey="calls"
+              />
             )}
           </CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle>Tool health</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle>Tool health</CardTitle>
+          </CardHeader>
           <CardContent>
-            {u.loading ? <Skeleton className="h-40" /> : (
+            {u.loading ? (
+              <Skeleton className="h-40" />
+            ) : (
               <div className="space-y-2">
                 {(u.data?.by_tool || []).map((t) => (
                   <div key={t.tool} className="flex items-center justify-between text-sm">
                     <span className="font-mono text-xs">{t.tool}</span>
                     <span className="flex items-center gap-2 text-xs text-slate-500">
                       {t.avg_ms}ms avg
-                      <Badge variant={t.error_rate > 0.05 ? 'danger' : 'success'}>{fmtPct(t.error_rate)} errors</Badge>
+                      <Badge variant={t.error_rate > 0.05 ? 'danger' : 'success'}>
+                        {fmtPct(t.error_rate)} errors
+                      </Badge>
                     </span>
                   </div>
                 ))}
-                {(u.data?.by_tool || []).length === 0 && <p className="text-xs text-slate-400">No MCP tool calls yet — connect the server in Settings.</p>}
+                {(u.data?.by_tool || []).length === 0 && (
+                  <p className="text-xs text-slate-400">
+                    No MCP tool calls yet — connect the server in Settings.
+                  </p>
+                )}
               </div>
             )}
           </CardContent>
@@ -63,14 +95,24 @@ export function McpUsage() {
       </div>
 
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><MessageSquare className="h-4 w-4" /> Recent agent questions</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MessageSquare className="h-4 w-4" /> Recent agent questions
+          </CardTitle>
+        </CardHeader>
         <CardContent>
-          {u.loading ? <Skeleton className="h-32" /> : (
+          {u.loading ? (
+            <Skeleton className="h-32" />
+          ) : (
             <div className="space-y-1.5">
               {(u.data?.recent_questions || []).map((q, i) => (
-                <div key={i} className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">"{q}"</div>
+                <div key={i} className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                  "{q}"
+                </div>
               ))}
-              {(u.data?.recent_questions || []).length === 0 && <p className="text-xs text-slate-400">No questions asked yet.</p>}
+              {(u.data?.recent_questions || []).length === 0 && (
+                <p className="text-xs text-slate-400">No questions asked yet.</p>
+              )}
             </div>
           )}
         </CardContent>

@@ -1,1 +1,0 @@
-{"mcpServers":{"agentlens":{"args":["-m","agentlens_mcp"],"command":"python","env":{"AGENTLENS_API_URL":"http://localhost:8000","AGENTLENS_READ_KEY":"alr_YOUR_READ_KEY","AGENTLENS_WRITE_KEY":"alw_YOUR_WRITE_KEY"}}}}

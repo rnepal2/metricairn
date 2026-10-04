@@ -1,6 +1,6 @@
 """Database engine / session wiring. SQLite by default, Postgres via DATABASE_URL."""
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from app.core.config import get_settings
@@ -14,9 +14,26 @@ def _make_engine():
     settings = get_settings()
     url = settings.database_url
     kwargs: dict = {}
+    if url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+psycopg://", 1)
     if url.startswith("sqlite"):
+        from pathlib import Path
+
+        from sqlalchemy.engine import make_url
+
+        database = make_url(url).database
+        if database and database != ":memory:":
+            Path(database).expanduser().parent.mkdir(parents=True, exist_ok=True)
         kwargs["connect_args"] = {"check_same_thread": False}
-    return create_engine(url, pool_pre_ping=True, **kwargs)
+    engine = create_engine(url, pool_pre_ping=True, **kwargs)
+    if engine.dialect.name == "sqlite":
+
+        @event.listens_for(engine, "connect")
+        def sqlite_constraints(connection, _record):
+            connection.execute("PRAGMA foreign_keys=ON")
+            connection.execute("PRAGMA busy_timeout=5000")
+
+    return engine
 
 
 engine = _make_engine()
@@ -61,4 +78,8 @@ def ensure_columns() -> None:
         for idx in table.indexes:
             cols = ", ".join(c.name for c in idx.columns)
             with engine.begin() as conn:
-                conn.execute(text(f"CREATE INDEX IF NOT EXISTS {idx.name} ON {table.name} ({cols})"))
+                conn.execute(
+                    text(
+                        f"CREATE {'UNIQUE ' if idx.unique else ''}INDEX IF NOT EXISTS {idx.name} ON {table.name} ({cols})"
+                    )
+                )

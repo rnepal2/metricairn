@@ -1,0 +1,22 @@
+[project]
+name = "metricairn-workspace"
+version = "0.1.0"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = ["metricairn-api", "metricairn-mcp"]
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.14,<0.17"]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+metricairn-api = { path = "apps/api", editable = true }
+metricairn-mcp = { path = "apps/mcp-server", editable = true }
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["apps/api", "apps/mcp-server"]
+testpaths = ["apps/api/tests", "apps/mcp-server/tests"]
+addopts = "--import-mode=importlib"

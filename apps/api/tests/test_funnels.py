@@ -3,15 +3,14 @@
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
 from app.core.database import Base, get_db
 from app.core.security import _hash
 from app.main import create_app
 from app.models import ApiKey, Event, Funnel, Project
 from app.services import analytics
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 TEST_DB = "sqlite:///./data/test_funnels.db"
 
@@ -37,8 +36,24 @@ def project(db):
     db.add(p)
     db.commit()
     db.refresh(p)
-    db.add(ApiKey(project_id=p.id, key_hash=_hash("alw_test"), key_prefix="alw_test", name="w", scopes="write"))
-    db.add(ApiKey(project_id=p.id, key_hash=_hash("alr_test"), key_prefix="alr_test", name="r", scopes="read"))
+    db.add(
+        ApiKey(
+            project_id=p.id,
+            key_hash=_hash("alw_test"),
+            key_prefix="alw_test",
+            name="w",
+            scopes="write",
+        )
+    )
+    db.add(
+        ApiKey(
+            project_id=p.id,
+            key_hash=_hash("alr_test"),
+            key_prefix="alr_test",
+            name="r",
+            scopes="read",
+        )
+    )
     db.commit()
     return p
 
@@ -66,13 +81,40 @@ STEPS = [
 def _journey(db, project_id, visitor, device, converts):
     """One visitor enters at /pricing on `device`; converts iff `converts`."""
     base = datetime.now(timezone.utc) - timedelta(hours=2)
-    db.add(Event(project_id=project_id, name="pageview", path="/pricing", url="https://acme.test/pricing",
-                 visitor_id=visitor, session_id=visitor, device=device, created_at=base))
+    db.add(
+        Event(
+            project_id=project_id,
+            name="pageview",
+            path="/pricing",
+            url="https://acme.test/pricing",
+            visitor_id=visitor,
+            session_id=visitor,
+            device=device,
+            created_at=base,
+        )
+    )
     if converts:
-        db.add(Event(project_id=project_id, name="signup", visitor_id=visitor, session_id=visitor,
-                     device=device, created_at=base + timedelta(minutes=5)))
-        db.add(Event(project_id=project_id, name="revenue", visitor_id=visitor, session_id=visitor,
-                     device=device, revenue_amount=10, created_at=base + timedelta(minutes=10)))
+        db.add(
+            Event(
+                project_id=project_id,
+                name="signup",
+                visitor_id=visitor,
+                session_id=visitor,
+                device=device,
+                created_at=base + timedelta(minutes=5),
+            )
+        )
+        db.add(
+            Event(
+                project_id=project_id,
+                name="revenue",
+                visitor_id=visitor,
+                session_id=visitor,
+                device=device,
+                revenue_amount=10,
+                created_at=base + timedelta(minutes=10),
+            )
+        )
     db.commit()
 
 
@@ -91,7 +133,10 @@ def funnel(db, project):
 
 
 def _range():
-    return (datetime.now(timezone.utc) - timedelta(days=1), datetime.now(timezone.utc) + timedelta(hours=1))
+    return (
+        datetime.now(timezone.utc) - timedelta(days=1),
+        datetime.now(timezone.utc) + timedelta(hours=1),
+    )
 
 
 def test_segmented_report_splits_by_device(db, project, funnel):
@@ -114,7 +159,9 @@ def test_segmented_report_unknown_dimension(db, project, funnel):
 
 def test_segmented_report_caps_segments(db, project, funnel):
     start, end = _range()
-    segs = analytics.funnel_report_by_segment(db, project.id, STEPS, start, end, "device", max_segments=1)
+    segs = analytics.funnel_report_by_segment(
+        db, project.id, STEPS, start, end, "device", max_segments=1
+    )
     assert len(segs) == 1
     assert segs[0]["value"] == "mobile"  # more entry visitors... tie broken by order; both 4
 
@@ -161,7 +208,9 @@ def test_heuristic_plans_funnel_segments():
 
 def test_ask_funnel_with_segment(db, project, funnel):
     c = _client(db)
-    r = c.post("/api/v1/ask", headers=R, json={"question": "which device converts best in the funnel?"})
+    r = c.post(
+        "/api/v1/ask", headers=R, json={"question": "which device converts best in the funnel?"}
+    )
     assert r.status_code == 200, r.text
     ans = r.json()["answer"]
     assert "mobile" in ans and "75" in ans, ans

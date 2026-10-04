@@ -1,5 +1,4 @@
-#!/bin/bash
-# Start the AgentLens API (SQLite, zero setup). Run from apps/api/.
-cd "$(dirname "$0")"
-mkdir -p data
-exec .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/../.."
+exec uv run uvicorn app.main:app --app-dir apps/api --host 127.0.0.1 --port 8000 "$@"

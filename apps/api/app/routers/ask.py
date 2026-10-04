@@ -32,10 +32,18 @@ _DETERMINISTIC_THRESHOLD = 0.7
 
 
 @router.post("", response_model=AskOut)
-def ask(body: AskRequest, request: Request, key: ApiKey = Depends(require_read_key),
-        db: Session = Depends(get_db)):
+def ask(
+    body: AskRequest,
+    request: Request,
+    key: ApiKey = Depends(require_read_key),
+    db: Session = Depends(get_db),
+):
     plan, planner, confidence = nl.plan(body.question)
     project_id = key.project_id
+    if body.project_id and body.project_id != project_id:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=403, detail="Key does not belong to this project")
     date_from = plan.get("date_from") or body.date_from
     date_to = plan.get("date_to") or body.date_to
     start, end = parse_range(date_from, date_to)
@@ -44,42 +52,70 @@ def ask(body: AskRequest, request: Request, key: ApiKey = Depends(require_read_k
     settings = get_settings()
     # Tests (and future BYO-key flows) inject a scripted LLM via app.state.
     llm_fn = getattr(request.app.state, "llm_fn", None)
-    agentic_available = settings.agentic_sql_enabled and (llm_service.llm_available() or llm_fn is not None)
+    agentic_available = settings.agentic_sql_enabled and (
+        llm_service.llm_available() or llm_fn is not None
+    )
 
     agentic_result = None
     if confidence < _DETERMINISTIC_THRESHOLD and agentic_available:
         agentic_result = sql_agent.answer_agentic(
-            db, project_id, body.question, start, end, llm_fn=llm_fn)
+            db, project_id, body.question, start, end, llm_fn=llm_fn
+        )
         if agentic_result["ok"]:
+            provenance = coverage.based_on(db, project_id, start, end)
             _log_ask(db, project_id, body.question, "agentic_sql", "agentic_sql")
             notes = agentic_result["validation_notes"] + coverage.coverage_notes(
-                db, project_id, action, start, end)
+                db, project_id, action, start, end
+            )
             return AskOut(
                 answer=agentic_result["answer"],
                 data=agentic_result["rows"],
                 chart=None,
                 planner="agentic_sql",
                 coverage_notes=notes,
-                based_on=coverage.based_on(db, project_id, start, end),
+                based_on=provenance,
+                sql_hint=agentic_result["sql"],
+                validation={
+                    "confidence": agentic_result["confidence"],
+                    "truncated": agentic_result["truncated"],
+                },
             )
 
     # Deterministic fast path — or honest fallback when the agentic path failed.
     answer, data, chart = _execute(db, project_id, action, plan, start, end)
     notes = coverage.coverage_notes(db, project_id, action, start, end)
     if agentic_result is not None and not agentic_result["ok"]:
-        notes = [f"Couldn't answer this precisely ({agentic_result['reason']}). "
-                 "Here's the overall picture instead."] + notes
+        notes = [
+            f"Couldn't answer this precisely ({agentic_result['reason']}). "
+            "Here's the overall picture instead."
+        ] + notes
     provenance = coverage.based_on(db, project_id, start, end)
 
+    if confidence < _DETERMINISTIC_THRESHOLD and agentic_result is None:
+        notes.insert(
+            0,
+            "This question is outside the deterministic query vocabulary. Showing an overview, not a precise answer. Configure an LLM provider for supported SQL questions.",
+        )
     _log_ask(db, project_id, body.question, planner, action)
-    return AskOut(answer=answer, data=data, chart=chart, planner=planner,
-                  coverage_notes=notes, based_on=provenance)
+    return AskOut(
+        answer=answer,
+        data=data,
+        chart=chart,
+        planner=planner,
+        coverage_notes=notes,
+        based_on=provenance,
+    )
 
 
 def _log_ask(db: Session, project_id: str, question: str, planner: str, action: str) -> None:
     # Observe our own agent usage (direction-2 analytics).
-    db.add(Event(project_id=project_id, name="ask",
-                 props={"question": question, "planner": planner, "action": action}))
+    db.add(
+        Event(
+            project_id=project_id,
+            name="ask",
+            props={"question": question, "planner": planner, "action": action},
+        )
+    )
     db.commit()
 
 
@@ -93,19 +129,69 @@ def _execute(db: Session, project_id: str, action: str, plan: dict, start, end):
         )
         return answer, [o], None
 
+    if action == "event_count":
+        event_name = plan["event_name"]
+        from sqlalchemy import distinct, func
+
+        count, visitors = (
+            analytics._base_query(db, project_id, start, end)
+            .filter(Event.name == event_name)
+            .with_entities(func.count(), func.count(distinct(func.nullif(Event.visitor_id, ""))))
+            .one()
+        )
+        return (
+            f"{count:,} '{event_name}' events from {visitors:,} identified visitors in this period.",
+            [{"event": event_name, "events": count, "visitors": visitors}],
+            None,
+        )
+
     if action == "timeseries_smart":
-        metric = plan.get("metric") or ("revenue" if "revenue" in plan.get("question", "").lower() else "visitors")
+        metric = plan.get("metric") or (
+            "revenue" if "revenue" in plan.get("question", "").lower() else "visitors"
+        )
         if metric not in ("visitors", "pageviews", "sessions", "events", "revenue"):
             metric = "visitors"
         series = analytics.timeseries(db, project_id, metric, start, end)
-        total = sum(p["value"] for p in series)
-        answer = f"{metric.title()} over the period: {total:,.0f} total across {len(series)} days."
-        chart = {"type": "timeseries", "x_key": "t", "y_key": "value", "title": f"{metric.title()} over time"}
+        o = analytics.overview(db, project_id, start, end)
+        total = o[metric]
+        answer = f"{metric.title()} over the period: {total:,.0f} total across {len(series)} daily buckets (unique visitors and sessions are deduplicated over the full period)."
+        chart = {
+            "type": "timeseries",
+            "x_key": "t",
+            "y_key": "value",
+            "title": f"{metric.title()} over time",
+        }
         return answer, series, chart
 
     if action == "breakdown":
         dimension = plan.get("dimension", "path")
-        rows = analytics.breakdown(db, project_id, dimension, start, end, limit=10)
+        rows = analytics.breakdown(
+            db,
+            project_id,
+            dimension,
+            start,
+            end,
+            limit=10,
+            order_by=plan.get("order_by", "visitors"),
+        )
+        if plan.get("order_by") == "revenue" and rows:
+            cur = analytics.overview(db, project_id, start, end)["revenue_currency"]
+            named = [row for row in rows if row["value"] != "(not set)"]
+            top = named[0] if named else rows[0]
+            answer = f"Highest recorded {cur} revenue by {dimension}: '{top['value']}' at {top['revenue']:,.2f}. Attribution follows event tags, not incremental marketing lift."
+            missing = next((row for row in rows if row["value"] == "(not set)"), None)
+            if missing:
+                answer += f" {missing['revenue']:,.2f} {cur} has no {dimension} tag and cannot be assigned to a named campaign."
+            return (
+                answer,
+                rows,
+                {
+                    "type": "bar",
+                    "x_key": "value",
+                    "y_key": "revenue",
+                    "title": f"Revenue by {dimension}",
+                },
+            )
         if not rows:
             return f"No {dimension} data in this period.", [], None
         # "(not set)" is honest data, but the headline should name a real value.
@@ -118,8 +204,15 @@ def _execute(db: Session, project_id: str, action: str, plan: dict, start, end):
         rev_leader = max(named or rows, key=lambda r: r["revenue"])
         if rev_leader["revenue"] > 0 and rev_leader["value"] != top["value"]:
             cur = analytics.overview(db, project_id, start, end)["revenue_currency"]
-            answer += f" Top by revenue: '{rev_leader['value']}' at {rev_leader['revenue']:,.2f} {cur}."
-        chart = {"type": "bar", "x_key": "value", "y_key": "visitors", "title": f"Visitors by {dimension}"}
+            answer += (
+                f" Top by revenue: '{rev_leader['value']}' at {rev_leader['revenue']:,.2f} {cur}."
+            )
+        chart = {
+            "type": "bar",
+            "x_key": "value",
+            "y_key": "visitors",
+            "title": f"Visitors by {dimension}",
+        }
         return answer, rows, chart
 
     if action == "revenue":
@@ -147,7 +240,7 @@ def _execute(db: Session, project_id: str, action: str, plan: dict, start, end):
     if action == "anomalies":
         found = anomaly.detect(db, project_id, start, end)
         if not found:
-            return "No significant anomalies in pageviews or revenue for this period.", [], None
+            return "No unusual activity flags in pageviews or revenue for this period.", [], None
         top = found[0]
         answer = (
             f"{len(found)} anomalies detected. Largest: {top['metric']} {top['direction']} "
@@ -170,7 +263,13 @@ def _execute(db: Session, project_id: str, action: str, plan: dict, start, end):
         for f in funnels:
             steps = analytics.funnel_report(db, project_id, f.steps, start, end)
             overall = steps[-1]["conversion_from_start"] if steps else 0
-            rows.append({"funnel": f.name, "overall_conversion": overall, "entered": steps[0]["visitors"] if steps else 0})
+            rows.append(
+                {
+                    "funnel": f.name,
+                    "overall_conversion": overall,
+                    "entered": steps[0]["visitors"] if steps else 0,
+                }
+            )
             if not detail and len(steps) >= 2:
                 leaks = [
                     (steps[i]["step"]["value"], steps[i]["conversion_from_prev"])
@@ -185,20 +284,32 @@ def _execute(db: Session, project_id: str, action: str, plan: dict, start, end):
                     f"Biggest leak: → {worst_step} ({worst_conv:.1%} step conversion)."
                 )
         if segment_by:
-            segs = analytics.funnel_report_by_segment(db, funnels[0].project_id, funnels[0].steps, start, end, segment_by)
+            segs = analytics.funnel_report_by_segment(
+                db, funnels[0].project_id, funnels[0].steps, start, end, segment_by
+            )
             if segs:
                 ranked = sorted(segs, key=lambda s: s["overall_conversion"], reverse=True)
                 comp = ", ".join(f"{s['value']} {s['overall_conversion']:.1%}" for s in ranked[:5])
                 detail += f" By {segment_by}: {comp}."
                 rows = [
-                    {"segment": s["value"], "visitors": s["visitors"], "overall_conversion": s["overall_conversion"]}
+                    {
+                        "segment": s["value"],
+                        "visitors": s["visitors"],
+                        "overall_conversion": s["overall_conversion"],
+                    }
                     for s in ranked
                 ]
                 best = max(rows, key=lambda r: r["overall_conversion"])
-                answer = f"'{funnels[0].name}' by {segment_by}: best is '{best['segment']}' at {best['overall_conversion']:.1%}." + detail
+                answer = (
+                    f"'{funnels[0].name}' by {segment_by}: highest observed is '{best['segment']}' at {best['overall_conversion']:.1%} ({best['visitors']} entry visitors). Small samples can be unstable."
+                    + detail
+                )
                 return answer, rows, None
         best = max(rows, key=lambda r: r["overall_conversion"])
-        answer = f"{len(rows)} funnel(s). Best converting: '{best['funnel']}' at {best['overall_conversion']:.1%}." + detail
+        answer = (
+            f"{len(rows)} funnel(s). Best converting: '{best['funnel']}' at {best['overall_conversion']:.1%}."
+            + detail
+        )
         return answer, rows, None
 
     if action == "mcp_usage":
@@ -221,7 +332,7 @@ def _explain(db: Session, project_id: str, start, end):
     timeline notes near the window. Heuristic — the planner is disclosed."""
     found = anomaly.detect(db, project_id, start, end)
     if not found:
-        return "No significant anomalies in pageviews or revenue for this period.", [], None
+        return "No unusual activity flags in pageviews or revenue for this period.", [], None
 
     dips = [a for a in found if a["direction"] == "dip"]
     a = (dips or found)[0]
@@ -246,19 +357,23 @@ def _explain(db: Session, project_id: str, start, end):
     d1 = datetime.fromisoformat(a.get("date_end", span[-1]))
     days = a.get("days", len(span))
     d0_start = d0
-    d0_end = d1 + timedelta(days=1) - timedelta(seconds=1)
-    base_start, base_end = d0 - timedelta(days=14), d0 - timedelta(seconds=1)
+    d0_end = d1 + timedelta(days=1)
+    base_start, base_end = d0 - timedelta(days=14), d0
 
     metric_key = "revenue" if a["metric"] == "revenue" else "pageviews"
-    unit = "$" if metric_key == "revenue" else ""
+    currency = a.get("currency") or analytics._currency(db, project_id, start, end)
+    unit = currency + " " if metric_key == "revenue" else ""
 
     def window_total(metric: str, w0, w1) -> float:
-        return sum(p["value"] for p in analytics.timeseries(db, project_id, metric, w0, w1))
+        return sum(
+            p["value"]
+            for p in analytics.timeseries(db, project_id, metric, w0, w1, currency=currency)
+        )
 
     t_total = window_total(metric_key, d0_start, d0_end)
     b_total = window_total(metric_key, base_start, base_end) / 14 * days
 
-    when = f"{span[0]} to {span[-1]} ({days} days)" if days > 1 else span[0]
+    when = f"{span[0]} to {d1.date().isoformat()} ({days} days)" if days > 1 else span[0]
     parts = [
         f"{a['metric'].title()} {a['direction']} {when}: "
         f"{unit}{t_total:,.0f} vs ~{unit}{b_total:,.0f} expected (z={a['z_score']})."
@@ -266,27 +381,45 @@ def _explain(db: Session, project_id: str, start, end):
 
     if b_total > 0 and t_total <= 0.15 * b_total:
         # Total outage across every segment — the strongest possible signal.
-        parts.append("The drop hit every device, browser, and source at once.")
+        parts.append(
+            "Recorded activity fell sharply overall; inspect instrumentation and segment coverage before concluding an outage."
+        )
     else:
         # Localize: which segment's metric moved most vs its own baseline.
         best: tuple | None = None  # (dim, segment, target, delta, baseline)
         for dim in ("device", "browser", "utm_source"):
-            tgt = {r["value"]: r[metric_key] for r in analytics.breakdown(db, project_id, dim, d0_start, d0_end)}
+            tgt = {
+                r["value"]: r[metric_key]
+                for r in analytics.breakdown(
+                    db, project_id, dim, d0_start, d0_end, currency=currency
+                )
+            }
             base = {
                 r["value"]: r[metric_key] / 14 * days
-                for r in analytics.breakdown(db, project_id, dim, base_start, base_end)
+                for r in analytics.breakdown(
+                    db, project_id, dim, base_start, base_end, currency=currency
+                )
             }
-            for seg, tv in tgt.items():
+            for seg in tgt.keys() | base.keys():
+                tv = tgt.get(seg, 0.0)
                 bv = base.get(seg, 0.0)
                 delta = tv - bv
-                if best is None or (a["direction"] == "dip" and delta < best[3]) or (
-                    a["direction"] == "spike" and delta > best[3]
+                if (
+                    best is None
+                    or (a["direction"] == "dip" and delta < best[3])
+                    or (a["direction"] == "spike" and delta > best[3])
                 ):
                     best = (dim, seg, tv, delta, bv)
         if best:
             dim, seg, tv, _delta, bv = best
-            verb = "drove the drop" if a["direction"] == "dip" else "drove the spike"
-            parts.append(f"Segment check: {dim} '{seg}' {verb} ({unit}{tv:,.0f} vs ~{unit}{bv:,.0f} normally).")
+            verb = (
+                "had the largest observed decrease"
+                if a["direction"] == "dip"
+                else "had the largest observed increase"
+            )
+            parts.append(
+                f"Segment check: {dim} '{seg}' {verb} ({unit}{tv:,.0f} vs ~{unit}{bv:,.0f} normally)."
+            )
 
     # Demand check: did traffic move with the metric?
     if metric_key == "revenue":
@@ -295,11 +428,11 @@ def _explain(db: Session, project_id: str, start, end):
         if pv_b > 0 and pv_t >= 0.7 * pv_b:
             parts.append(
                 f"Pageviews held at {pv_t:,.0f} vs ~{pv_b:,.0f} normally — traffic was fine, "
-                "so this looks like a checkout or payment failure, not a demand problem."
+                "so investigate checkout, payment processing, and revenue instrumentation. These events alone cannot establish the cause."
             )
         elif pv_b > 0:
             parts.append(
-                f"Pageviews also fell ({pv_t:,.0f} vs ~{pv_b:,.0f}), so demand dropped too — "
+                f"Pageviews also fell ({pv_t:,.0f} vs ~{pv_b:,.0f}), so observed traffic declined too — "
                 "check campaigns and sources, not just checkout."
             )
 
@@ -315,6 +448,10 @@ def _explain(db: Session, project_id: str, start, end):
         .all()
     )
     if notes:
-        parts.append("Timeline notes around that window: " + "; ".join(f"'{n.text}' ({n.at.date()})" for n in notes) + ".")
+        parts.append(
+            "Timeline notes around that window: "
+            + "; ".join(f"'{n.text}' ({n.at.date()})" for n in notes)
+            + "."
+        )
 
     return " ".join(parts), found, None

@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import ApiKey, require_read_key, require_write_key
+from app.core.security import ApiKey, require_management_key, require_read_key
 from app.models import DigestSetting
 from app.services import digest as digest_svc
 
@@ -32,14 +32,20 @@ def _out(s: DigestSetting) -> dict:
 def get_settings(key: ApiKey = Depends(require_read_key), db: Session = Depends(get_db)):
     s = db.query(DigestSetting).filter(DigestSetting.project_id == key.project_id).first()
     if not s:
-        return {"project_id": key.project_id, "enabled": False, "weekday": 0, "hour_utc": 12, "last_sent_at": None}
+        return {
+            "project_id": key.project_id,
+            "enabled": False,
+            "weekday": 0,
+            "hour_utc": 12,
+            "last_sent_at": None,
+        }
     return _out(s)
 
 
 @router.put("/settings")
 def put_settings(
     body: DigestSettingIn,
-    key: ApiKey = Depends(require_write_key),
+    key: ApiKey = Depends(require_management_key),
     db: Session = Depends(get_db),
 ):
     s = db.query(DigestSetting).filter(DigestSetting.project_id == key.project_id).first()
@@ -61,7 +67,7 @@ def preview(key: ApiKey = Depends(require_read_key), db: Session = Depends(get_d
 
 
 @router.post("/send")
-def send_now(key: ApiKey = Depends(require_write_key), db: Session = Depends(get_db)):
+def send_now(key: ApiKey = Depends(require_management_key), db: Session = Depends(get_db)):
     """Compile and deliver the digest immediately (same path the scheduler uses)."""
     s = db.query(DigestSetting).filter(DigestSetting.project_id == key.project_id).first()
     if not s or not s.enabled:

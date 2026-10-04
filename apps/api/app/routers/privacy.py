@@ -1,6 +1,6 @@
 """Data transparency and deletion.
 
-AgentLens only ever sees the events a customer explicitly sends us — this
+Metricairn only ever sees the events a customer explicitly sends us — this
 router makes that verifiable: what we hold for a project, and a one-click
 way to remove all of it. Deleting data keeps the project and its API keys;
 it removes every row derived from customer activity.
@@ -11,7 +11,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import require_read_key, require_write_key
+from app.core.security import require_management_key, require_read_key
 from app.models import (
     AlertChannel,
     AlertDelivery,
@@ -20,6 +20,8 @@ from app.models import (
     DigestSetting,
     Event,
     Funnel,
+    Goal,
+    Investigation,
     Note,
 )
 from app.routers.projects import _assert_key_project
@@ -31,6 +33,8 @@ router = APIRouter(prefix="/api/v1/projects", tags=["privacy"])
 # Project are deliberately excluded: deleting data must not lock the
 # customer out or destroy their keys.
 _DELETABLE = [
+    (Investigation, "investigations"),
+    (Goal, "goals"),
     (Event, "events"),
     (Note, "notes"),
     (Funnel, "funnels"),
@@ -47,20 +51,12 @@ def data_summary(
     key: ApiKey = Depends(require_read_key),
     db: Session = Depends(get_db),
 ):
-    """What AgentLens currently holds for this project — counts, date range,
+    """What Metricairn currently holds for this project — counts, date range,
     and the event names flowing in. The transparency counterpart to DELETE."""
     _assert_key_project(key, project_id)
 
-    first = (
-        db.query(func.min(Event.created_at))
-        .filter(Event.project_id == project_id)
-        .scalar()
-    )
-    last = (
-        db.query(func.max(Event.created_at))
-        .filter(Event.project_id == project_id)
-        .scalar()
-    )
+    first = db.query(func.min(Event.created_at)).filter(Event.project_id == project_id).scalar()
+    last = db.query(func.max(Event.created_at)).filter(Event.project_id == project_id).scalar()
     top_events = (
         db.query(Event.name, func.count(Event.id).label("n"))
         .filter(Event.project_id == project_id)
@@ -89,11 +85,11 @@ def data_summary(
 @router.delete("/{project_id}/data")
 def delete_all_data(
     project_id: str,
-    key: ApiKey = Depends(require_write_key),
+    key: ApiKey = Depends(require_management_key),
     db: Session = Depends(get_db),
 ):
-    """Remove everything AgentLens holds for this project: events, notes,
-    funnels, alert configuration and delivery history. Requires the write
+    """Remove everything Metricairn holds for this project: events, notes,
+    goals, investigations, funnels, alert configuration and delivery history. Requires the management
     key — a read key (or the dashboard alone) can never do this."""
     _assert_key_project(key, project_id)
     deleted: dict[str, int] = {}

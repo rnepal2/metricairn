@@ -1,30 +1,16 @@
-# Production-like demo: Postgres + API. The web dashboard runs with `npm run dev`.
-# Quickest demo (no Docker): sqlite default — just `uvicorn app.main:app` in apps/api.
+# Dashboard, API and tracker at http://localhost:8000. No external services required.
 services:
-  postgres:
-    image: postgres:16-alpine
+  metricairn:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
     environment:
-      POSTGRES_USER: agentlens
-      POSTGRES_PASSWORD: agentlens
-      POSTGRES_DB: agentlens
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U agentlens"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  api:
-    build: ./apps/api
-    environment:
-      DATABASE_URL: postgresql://agentlens:agentlens@postgres:5432/agentlens
-      CORS_ORIGINS: http://localhost:5173
+      PROVISIONING_TOKEN: ${PROVISIONING_TOKEN:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8000}
+      SCHEDULER_ENABLED: "false"
     ports:
-      - "8000:8000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - data:/srv/data
 volumes:
-  pgdata:
+  data:

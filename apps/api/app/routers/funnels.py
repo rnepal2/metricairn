@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import require_read_key
+from app.core.security import require_management_key, require_read_key
 from app.models import ApiKey, Funnel
 from app.schemas import FunnelCreate
 from app.services import analytics
@@ -14,10 +14,14 @@ router = APIRouter(prefix="/api/v1/funnels", tags=["funnels"])
 
 
 @router.post("")
-def create_funnel(body: FunnelCreate, key: ApiKey = Depends(require_read_key), db: Session = Depends(get_db)):
+def create_funnel(
+    body: FunnelCreate, key: ApiKey = Depends(require_management_key), db: Session = Depends(get_db)
+):
     for step in body.steps:
         if step.get("kind") not in ("page", "event") or not step.get("value"):
-            raise HTTPException(status_code=422, detail="Each step needs {kind: page|event, value: str}")
+            raise HTTPException(
+                status_code=422, detail="Each step needs {kind: page|event, value: str}"
+            )
     funnel = Funnel(project_id=key.project_id, name=body.name, steps=body.steps)
     db.add(funnel)
     db.commit()
@@ -41,16 +45,19 @@ def funnel_report(
     db: Session = Depends(get_db),
 ):
     funnel = (
-        db.query(Funnel)
-        .filter(Funnel.id == funnel_id, Funnel.project_id == key.project_id)
-        .first()
+        db.query(Funnel).filter(Funnel.id == funnel_id, Funnel.project_id == key.project_id).first()
     )
     if not funnel:
         raise HTTPException(status_code=404, detail="Funnel not found")
     start, end = parse_range(date_from, date_to)
     steps = analytics.funnel_report(db, key.project_id, funnel.steps, start, end)
     overall = steps[-1]["conversion_from_start"] if steps else 0.0
-    out = {"funnel_id": funnel.id, "name": funnel.name, "steps": steps, "overall_conversion": overall}
+    out = {
+        "funnel_id": funnel.id,
+        "name": funnel.name,
+        "steps": steps,
+        "overall_conversion": overall,
+    }
     if segment_by:
         try:
             out["segments"] = analytics.funnel_report_by_segment(

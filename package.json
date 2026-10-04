@@ -1,0 +1,24 @@
+{
+  "name": "metricairn-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix apps/web run dev",
+    "build": "npm --prefix packages/tracker run build && npm --prefix apps/web run build",
+    "test:tracker": "npm --prefix packages/tracker test",
+    "test:e2e": "playwright test",
+    "typecheck": "npm --prefix apps/web run typecheck",
+    "setup:web": "npm --prefix apps/web ci && npm --prefix packages/tracker ci",
+    "format": "prettier --write \"apps/web/src/**/*.{ts,tsx}\" && uv run ruff format apps scripts",
+    "format:check": "prettier --check \"apps/web/src/**/*.{ts,tsx}\" && uv run ruff format --check apps scripts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.0",
+    "prettier": "^3.9.9"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rnepal2/metricairn.git"
+  }
+}

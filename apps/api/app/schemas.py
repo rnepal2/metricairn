@@ -1,14 +1,16 @@
 """Pydantic schemas for request/response bodies."""
 
-from datetime import datetime
+import json
+import re
+from datetime import datetime, timedelta, timezone
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # ---------- Projects & keys ----------
 class ProjectCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
-    domain: str = ""
+    domain: str = Field(default="", max_length=300)
 
 
 class KeyPairOut(BaseModel):
@@ -23,25 +25,57 @@ class ProjectOut(BaseModel):
     created_at: datetime
     write_key: str | None = None  # only returned on creation
     read_key: str | None = None
+    management_key: str | None = None
 
 
 # ---------- Ingest ----------
 class IngestEvent(BaseModel):
+    event_id: str | None = Field(default=None, min_length=1, max_length=128)
     name: str = Field(min_length=1, max_length=200)  # 'pageview' or custom
-    url: str = ""
-    referrer: str = ""
-    session_id: str = ""
-    visitor_id: str = ""
+    url: str = Field(default="", max_length=2000)
+    referrer: str = Field(default="", max_length=2000)
+    session_id: str = Field(default="", max_length=64)
+    visitor_id: str = Field(default="", max_length=64)
     user_id: str | None = Field(default=None, max_length=128)  # optional identified user
     group_id: str | None = Field(default=None, max_length=128)  # optional B2B account id
-    device: str = ""
-    browser: str = ""
-    os: str = ""
-    country: str = ""
+    device: str = Field(default="", max_length=30)
+    browser: str = Field(default="", max_length=60)
+    os: str = Field(default="", max_length=60)
+    country: str = Field(default="", max_length=100)
     props: dict = Field(default_factory=dict)
-    revenue_amount: float = 0.0
-    revenue_currency: str = ""
+    revenue_amount: float = Field(default=0.0, ge=0, allow_inf_nan=False)
+    revenue_currency: str = Field(default="", max_length=3)
     at: datetime | None = None  # client timestamp; server time if omitted
+
+    @field_validator("props")
+    @classmethod
+    def bounded_props(cls, value):
+        try:
+            serialized = json.dumps(value, allow_nan=False)
+        except (TypeError, ValueError):
+            raise ValueError("props must contain finite JSON values") from None
+        if len(serialized.encode()) > 8192:
+            raise ValueError("props exceeds 8 KiB")
+        return value
+
+    @model_validator(mode="after")
+    def validate_event(self):
+        if self.at:
+            self.at = (
+                self.at.replace(tzinfo=timezone.utc)
+                if self.at.tzinfo is None
+                else self.at.astimezone(timezone.utc)
+            )
+            if self.at > datetime.now(timezone.utc) + timedelta(minutes=5):
+                raise ValueError("event timestamp is more than five minutes in the future")
+        self.revenue_currency = self.revenue_currency.upper()
+        if self.name == "revenue":
+            self.revenue_currency = self.revenue_currency or "USD"
+            if not re.fullmatch(r"[A-Z]{3}", self.revenue_currency):
+                raise ValueError("revenue currency must be a three-letter code")
+        elif self.revenue_amount:
+            raise ValueError("revenue_amount is only valid on revenue events")
+        return self
 
 
 class IngestBatch(BaseModel):
@@ -78,8 +112,10 @@ class OverviewOut(BaseModel):
 
 
 class FunnelCreate(BaseModel):
-    name: str
-    steps: list[dict]  # [{"kind": "page"|"event", "value": str}]
+    name: str = Field(min_length=1, max_length=200)
+    steps: list[dict] = Field(
+        min_length=2, max_length=12
+    )  #  # [{"kind": "page"|"event", "value": str}]
 
 
 class FunnelStepReport(BaseModel):
@@ -116,10 +152,13 @@ class AskOut(BaseModel):
     answer: str
     data: list[dict] = Field(default_factory=list)
     chart: dict | None = None  # {type: 'timeseries'|'bar', x_key, y_key, title}
+    validation: dict = Field(default_factory=dict)
     sql_hint: str | None = None
     planner: str = "heuristic"  # heuristic | llm — transparency about how the question was planned
     coverage_notes: list[str] = Field(default_factory=list)  # what the answer couldn't see
-    based_on: dict = Field(default_factory=dict)  # {events, event_names, date_range} — what backed the answer
+    based_on: dict = Field(
+        default_factory=dict
+    )  # {events, event_names, date_range} — what backed the answer
 
 
 class NoteCreate(BaseModel):

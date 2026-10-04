@@ -24,27 +24,29 @@ def format_anomaly_message(
     """
     if test:
         return (
-            f"AgentLens test alert — {project_name}",
-            f"Hello from AgentLens! Alerts for project '{project_name}' are wired up correctly. "
+            f"Metricairn test alert — {project_name}",
+            f"Hello from Metricairn! Alerts for project '{project_name}' are wired up correctly. "
             "You'll get a message like this when a real anomaly is detected.",
         )
     lines = []
     for a in anomalies:
         date = a["date"] + (f" → {a['date_end']}" if a.get("date_end") else "")
         if a["metric"] == "revenue":
-            obs, exp = f"${a['value']:,.0f}", f"${a['expected']:,.0f}"
+            obs, exp = (
+                f"{a['value']:,.2f} {a.get('currency', 'USD')}",
+                f"{a['expected']:,.2f} {a.get('currency', 'USD')}",
+            )
         else:
             obs, exp = f"{a['value']:,.0f}", f"{a['expected']:,.0f}"
         lines.append(
-            f"• {a['metric']} {a['direction']} {date}: {obs} vs ~{exp} expected "
-            f"(z={a['z_score']})"
+            f"• {a['metric']} {a['direction']} {date}: {obs} vs ~{exp} expected (z={a['z_score']})"
         )
     n = len(anomalies)
-    subject = f"AgentLens alert — {project_name}: {n} anomal{'y' if n == 1 else 'ies'}"
+    subject = f"Metricairn alert — {project_name}: {n} anomal{'y' if n == 1 else 'ies'}"
     body = (
-        f"AgentLens detected {n} anomal{'y' if n == 1 else 'ies'} for '{project_name}':\n\n"
+        f"Metricairn detected {n} anomal{'y' if n == 1 else 'ies'} for '{project_name}':\n\n"
         + "\n".join(lines)
-        + "\n\nAsk your AI agent \"why did this happen?\" for a grounded explanation."
+        + '\n\nAsk your AI agent "why did this happen?" for a grounded explanation.'
     )
     return subject, body
 
@@ -54,7 +56,7 @@ def _as_html(subject: str, body: str) -> str:
     return (
         "<!doctype html><html><body style='font-family:sans-serif;color:#0f172a'>"
         f"<h2 style='font-size:16px'>{_html.escape(subject)}</h2>{paras}"
-        "<p style='color:#94a3b8;font-size:12px'>Sent by AgentLens anomaly alerts.</p>"
+        "<p style='color:#94a3b8;font-size:12px'>Sent by Metricairn anomaly alerts.</p>"
         "</body></html>"
     )
 
@@ -70,7 +72,7 @@ def send_slack(webhook_url: str, subject: str, body: str) -> tuple[bool, str]:
             return True, f"slack http {r.status_code}"
         return False, f"slack http {r.status_code}: {r.text[:200]}"
     except Exception as e:  # noqa: BLE001 — delivery must never raise
-        return False, f"slack error: {e}"
+        return False, f"slack error: {type(e).__name__}"
 
 
 def send_email(to: str, subject: str, body: str) -> tuple[bool, str]:
@@ -93,7 +95,7 @@ def send_email(to: str, subject: str, body: str) -> tuple[bool, str]:
             return True, f"resend http {r.status_code}"
         return False, f"resend http {r.status_code}: {r.text[:200]}"
     except Exception as e:  # noqa: BLE001
-        return False, f"email error: {e}"
+        return False, f"email error: {type(e).__name__}"
 
 
 def deliver(channel_kind: str, target: str, subject: str, body: str) -> tuple[bool, str]:

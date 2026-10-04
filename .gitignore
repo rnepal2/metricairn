@@ -18,3 +18,17 @@ dist-ssr/
 .vscode/
 # Data
 data/
+# Build/test caches and local output
+*.tsbuildinfo
+.pytest_cache/
+.ruff_cache/
+coverage/
+htmlcov/
+.coverage
+playwright-report/
+test-results/
+.env.*
+!.env.example
+
+# Locally generated demo snapshots
+output/

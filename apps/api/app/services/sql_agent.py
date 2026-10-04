@@ -12,8 +12,7 @@ import re
 from collections.abc import Callable
 
 from app.models import Event
-from app.services import llm
-from app.services import sql_sandbox, sql_validate
+from app.services import llm, sql_sandbox, sql_validate
 
 LlmFn = Callable[[str, str], "str | None"]
 
@@ -21,7 +20,7 @@ _COLUMN_MEANINGS = {
     "id": "row id",
     "project_id": "TENANT SCOPE — every query MUST filter project_id = '<given id>'",
     "session_id": "groups hits into sessions",
-    "visitor_id": "stable per-visitor id; COUNT(DISTINCT visitor_id) = visitors",
+    "visitor_id": "stable per-visitor id; COUNT(DISTINCT NULLIF(visitor_id, '')) = visitors",
     "user_id": "nullable; set when the customer identifies the user server-side",
     "group_id": "nullable; B2B account/company id",
     "name": "event name: 'pageview' for page views, else custom ('signup', 'revenue', …)",
@@ -73,18 +72,20 @@ Rules:
 3. Restrict created_at to the given window unless the question asks otherwise.
 4. Read-only: no INSERT/UPDATE/DELETE/DROP/ALTER/CREATE under any circumstance.
 5. Prefer clear column aliases (e.g. AS visitors, AS revenue).
-6. Aggregate sensibly: visitors = COUNT(DISTINCT visitor_id); revenue = SUM(revenue_amount) WHERE name='revenue'.
+6. Aggregate sensibly: visitors = COUNT(DISTINCT NULLIF(visitor_id, '')); revenue = SUM(revenue_amount) WHERE name='revenue'.
 7. If the question can't be answered from this schema, output exactly: CANNOT_ANSWER
 
 {schema}
 """
 
 
-def build_prompts(question: str, project_id: str, start, end, dialect: str = "sqlite") -> tuple[str, str]:
+def build_prompts(
+    question: str, project_id: str, start, end, dialect: str = "sqlite"
+) -> tuple[str, str]:
     system = _SYSTEM_PROMPT.format(project_id=project_id, schema=describe_schema(dialect))
     user = (
         f"Question: {question}\n"
-        f"Time window: {start.date().isoformat()} to {end.date().isoformat()} (UTC).\n"
+        f"Time window: {start.isoformat()} <= created_at < {end.isoformat()} (UTC). The execution layer enforces these bounds.\n"
         f"project_id to filter: {project_id}\n"
         "SQL:"
     )
@@ -108,8 +109,9 @@ def extract_sql(text: str) -> str | None:
     return candidate.rstrip().rstrip(";").strip() or None
 
 
-def generate_sql(question: str, project_id: str, start, end, dialect: str = "sqlite",
-                 llm_fn: LlmFn | None = None) -> str | None:
+def generate_sql(
+    question: str, project_id: str, start, end, dialect: str = "sqlite", llm_fn: LlmFn | None = None
+) -> str | None:
     """Ask the LLM for SQL. Returns the statement or None."""
     fn = llm_fn or llm.complete_text
     system, user = build_prompts(question, project_id, start, end, dialect)
@@ -120,24 +122,10 @@ def generate_sql(question: str, project_id: str, start, end, dialect: str = "sql
     return extract_sql(text) if text else None
 
 
-def narrate(question: str, columns: list[str], rows: list[tuple],
-            llm_fn: LlmFn | None = None) -> str:
-    """Turn executed rows into an answer. LLM narration when available;
-    otherwise a deterministic template that only presents the rows — it never
-    invents numbers, so grounding holds by construction."""
-    fn = llm_fn if llm_fn is not None else (llm.complete_text if llm.llm_available() else None)
-    if fn is not None:
-        system = ("You answer a product-analytics question using ONLY the query "
-                  "results below. Every number you state must appear in the results. "
-                  "If the results don't answer the question, say so plainly.")
-        user = (f"Question: {question}\nColumns: {', '.join(columns)}\n"
-                f"Rows (max 25 shown):\n{_format_rows(columns, rows, limit=25)}")
-        try:
-            text = fn(system, user)
-            if text and text.strip():
-                return text.strip()
-        except Exception:
-            pass
+def narrate(
+    question: str, columns: list[str], rows: list[tuple], llm_fn: LlmFn | None = None
+) -> str:
+    """Render executed results deterministically; no second model call or invented claims."""
     return _template_narrate(question, columns, rows)
 
 
@@ -156,8 +144,10 @@ def _template_narrate(question: str, columns: list[str], rows: list[tuple]) -> s
     n = len(rows)
     return f"Based on the data ({n} row{'s' if n != 1 else ''}):\n{_format_rows(columns, rows)}"
 
-def answer_agentic(db, project_id: str, question: str, start, end,
-                   llm_fn: LlmFn | None = None) -> dict:
+
+def answer_agentic(
+    db, project_id: str, question: str, start, end, llm_fn: LlmFn | None = None
+) -> dict:
     """Full agentic path: generate SQL → validate → execute → assess →
     narrate. Returns {"ok": True, ...} on success; {"ok": False, "reason": ...}
     when anything fails — the router turns that into an honest fallback,
@@ -165,26 +155,53 @@ def answer_agentic(db, project_id: str, question: str, start, end,
     dialect = db.get_bind().dialect.name
     sql = generate_sql(question, project_id, start, end, dialect, llm_fn=llm_fn)
     if not sql:
-        return {"ok": False, "planner": "agentic_sql",
-                "reason": "couldn't formulate a SQL query for this question"}
+        return {
+            "ok": False,
+            "planner": "agentic_sql",
+            "reason": "couldn't formulate a SQL query for this question",
+        }
+
+    from app.services.analytics import revenue_currencies
+
+    currencies = revenue_currencies(db, project_id, start, end)
+    if len(currencies) > 1 and "revenue_amount" in sql.lower():
+        return {
+            "ok": False,
+            "planner": "agentic_sql",
+            "reason": "Multiple currencies are present. Use the currency selector on Revenue for a reliable total; generated revenue SQL is disabled for mixed-currency projects.",
+        }
 
     assessment = sql_validate.assess(question, sql, project_id)
     if not assessment["ok"]:
-        return {"ok": False, "planner": "agentic_sql", "sql": sql,
-                "reason": f"generated SQL failed validation: {'; '.join(assessment['issues'])}"}
+        return {
+            "ok": False,
+            "planner": "agentic_sql",
+            "sql": sql,
+            "reason": f"generated SQL failed validation: {'; '.join(assessment['issues'])}",
+        }
 
-    exec_result = sql_sandbox.execute(db, sql)
+    exec_result = sql_sandbox.execute(db, sql, project_id=project_id, start=start, end=end)
     if not exec_result["ok"]:
-        return {"ok": False, "planner": "agentic_sql", "sql": sql,
-                "reason": f"query failed: {exec_result['reason']}"}
+        return {
+            "ok": False,
+            "planner": "agentic_sql",
+            "sql": sql,
+            "reason": f"query failed: {exec_result['reason']}",
+        }
 
     final = sql_validate.assess_result(assessment, exec_result)
     if final["confidence"] < sql_validate.confidence_threshold():
-        return {"ok": False, "planner": "agentic_sql", "sql": sql,
-                "reason": (f"low confidence ({final['confidence']:.2f}): "
-                           f"{'; '.join(final['issues']) or 'no specific issue'}")}
+        return {
+            "ok": False,
+            "planner": "agentic_sql",
+            "sql": sql,
+            "reason": (
+                f"low confidence ({final['confidence']:.2f}): "
+                f"{'; '.join(final['issues']) or 'no specific issue'}"
+            ),
+        }
 
-    answer = narrate(question, exec_result["columns"], exec_result["rows"], llm_fn=llm_fn)
+    answer = narrate(question, exec_result["columns"], exec_result["rows"])
     return {
         "ok": True,
         "planner": "agentic_sql",
@@ -194,4 +211,5 @@ def answer_agentic(db, project_id: str, question: str, start, end,
         "rows": [dict(zip(exec_result["columns"], r)) for r in exec_result["rows"]],
         "confidence": final["confidence"],
         "validation_notes": final["issues"],
+        "truncated": exec_result["truncated"],
     }

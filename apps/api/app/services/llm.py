@@ -15,11 +15,17 @@ from app.core.config import get_settings
 def _anthropic(system: str, user: str, api_key: str, model: str) -> str:
     resp = httpx.post(
         "https://api.anthropic.com/v1/messages",
-        headers={"x-api-key": api_key, "anthropic-version": "2023-06-01",
-                 "content-type": "application/json"},
-        json={"model": model, "max_tokens": 1200,
-              "system": system,
-              "messages": [{"role": "user", "content": user}]},
+        headers={
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        },
+        json={
+            "model": model,
+            "max_tokens": 1200,
+            "system": system,
+            "messages": [{"role": "user", "content": user}],
+        },
         timeout=30,
     )
     resp.raise_for_status()
@@ -30,9 +36,11 @@ def _openai(system: str, user: str, api_key: str) -> str:
     resp = httpx.post(
         "https://api.openai.com/v1/chat/completions",
         headers={"authorization": f"Bearer {api_key}", "content-type": "application/json"},
-        json={"model": "gpt-4o-mini", "max_tokens": 1200,
-              "messages": [{"role": "system", "content": system},
-                           {"role": "user", "content": user}]},
+        json={
+            "model": "gpt-4o-mini",
+            "max_tokens": 1200,
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        },
         timeout=30,
     )
     resp.raise_for_status()

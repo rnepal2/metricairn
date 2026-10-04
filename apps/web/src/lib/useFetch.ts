@@ -1,24 +1,30 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 export function useFetch<T>(fn: () => Promise<T>, deps: unknown[]) {
   const [data, setData] = useState<T | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-
+  const generation = useRef(0)
   const load = useCallback(async () => {
+    const request = ++generation.current
     setLoading(true)
     setError('')
+    setData(null)
     try {
-      setData(await fn())
+      const result = await fn()
+      if (request === generation.current) setData(result)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load')
+      if (request === generation.current)
+        setError(e instanceof Error ? e.message : 'Failed to load')
     } finally {
-      setLoading(false)
+      if (request === generation.current) setLoading(false)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps)
-
-  useEffect(() => { load() }, [load])
-
+  useEffect(() => {
+    void load()
+    return () => {
+      generation.current++
+    }
+  }, [load])
   return { data, loading, error, reload: load }
 }

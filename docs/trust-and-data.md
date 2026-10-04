@@ -1,70 +1,33 @@
-# Trust & data: what AgentLens sees, and what it never will
+# Metric definitions
 
-AgentLens answers questions about your product from **events you explicitly send us**.
-There is no database connection, no Stripe OAuth, no credentials into your infrastructure.
-If you don't send it, we can't see it — and we can't answer questions about it.
+All values describe **recorded activity**, not complete business reality. Queries are project-scoped. Windows are UTC `[start, end)`; a date-only `date_to` includes that calendar day. Query windows are limited to 366 days. Internal `ask` and `mcp_tool_call` events are excluded from customer metrics.
 
-## What we collect
+| Metric | Definition |
+|---|---|
+| Visitors | Distinct nonempty visitor IDs in the window |
+| Pageviews | Events named `pageview` |
+| Sessions | Distinct nonempty session IDs on pageviews |
+| Custom events | Occurrences excluding pageviews, revenue, and internal telemetry |
+| Event count | Occurrences of one named event |
+| Bounce rate | Share of pageview sessions with exactly one pageview |
+| Session duration | Last minus first pageview timestamp; an estimate, not engaged time |
+| Goal conversion | Visitors with a pageview then the goal event in the window / visitors with a pageview; repeats count once |
+| Funnel conversion | Visitors completing configured steps in chronological order / entry visitors; segments use the entry event |
 
-Exactly one thing: the event stream you push to `POST /api/v1/ingest/events`.
+Distinct identities can appear in multiple segments or time buckets. Do not sum bucket uniques into period uniques. Goal conversion is a period measure, not an acquisition cohort; unidentified or pre-entry goal events remain in occurrence counts but do not convert a visitor.
 
-| Field | Example | Notes |
-|---|---|---|
-| `name` | `revenue`, `signup`, `pageview` | You choose the names |
-| `revenue_amount` | `49.00` | Only on `revenue` events you fire |
-| `path`, `url`, `referrer` | `/pricing` | Page context |
-| `utm_source/medium/campaign` | `invoice-template-guide` | Attribution |
-| `device`, `browser`, `os`, `country` | `desktop`, `Chrome` | Coarse, from user-agent + GeoIP |
-| `user_id`, `group_id` | `u_123`, `acme-corp` | Optional, only when you identify users server-side; NULL otherwise |
-| `props` | `{"plan": "pro"}` | Your custom properties |
+## Retention
 
-That's the whole data model. The dashboard's **Settings → Data & privacy** tab shows
-a live summary of everything we hold for your project — counts, date range, event names.
+Weekly cohorts use a visitor’s first recorded customer event across available project history. Cohort selection follows the query window; return activity can optionally be restricted to an event. Weeks begin Monday UTC. Only completed weeks are measured; incomplete/future cells are `null`, not zero. Week 0 includes acquisition activity. The first selected week may be partial. Missing historical events and cleared browser IDs change the interpretation; there is no cross-device stitching.
 
-## What we never see
+## Investigations
 
-- **Your customers' personal data.** We don't need names or emails to answer "why did
-  revenue dip?" — just the event and the amount. Don't put PII in `props`.
-- **Your database.** We never connect to it, copy it, or ask for credentials.
-- **Your Stripe account.** Revenue answers come from `revenue` events *you* fire
-  (or the optional Stripe webhook below) — never from Stripe API access.
-- **Anything you don't send.** The agent's `list_metrics` can only discover event
-  names that exist in your stream. No data, no answers — it says so instead of guessing.
+The preceding comparison window has equal duration. Pageview/custom-event counts partition by event-stamped source, device, browser, and path. Each dimension reconciles independently to total change, including an explicit remaining tail. Missing tags are visible. Changes are descriptive: weekday mix, seasonality, collection outages, and deployment changes can explain them. Timeline notes provide context, not causal proof. Anomaly scores are screening heuristics, not significance tests.
 
-## The revenue-events dependency (read this first)
+Reports include resolved plans, metric version, generation time, and evidence ID. Saving re-runs the fixed window and freezes that result; late-arriving events can make it differ from an earlier live preview. Reviews do not rewrite saved evidence. JSON/CSV exports contain project data; treat them accordingly.
 
-Every revenue answer — anomaly alerts, attribution, the Monday digest — depends on
-your app firing `revenue` events. The browser tracker alone gives you traffic and
-funnels; **revenue insight needs the two-line server-side call** in your checkout
-handler (see Settings → Installation → Server events, or the snippet below).
+## Collection and optional features
 
-If you only install the browser snippet, the AI will tell you plainly that it has
-no revenue data rather than inventing numbers. The dashboard's integration checklist
-shows what's flowing and what's missing.
+The tracker stores random browser-local visitor/session IDs, uses a 30-minute session timeout, preserves landing UTMs, strips arbitrary query strings/fragments, and respects DNT/GPC/disable controls. No cookies are set. Arbitrary custom properties and identities are not automatically anonymized. Server collection is not subject to browser privacy controls. Consent and retention decisions belong to the operator.
 
-```python
-# Python — in your checkout success handler
-import requests
-requests.post("https://YOUR-AGENTLENS/api/v1/ingest/events",
-    headers={"X-Write-Key": "alw_..."},
-    json={"name": "revenue", "revenue_amount": 49.00,
-          "props": {"plan": "pro", "billing": "monthly"}})
-```
-
-Prefer zero code? Enable the optional Stripe webhook receiver (`Settings → Installation → Server events`):
-`checkout.session.completed` and `invoice.paid` become `revenue` events automatically.
-It's off by default — the push model means you hold the tap.
-
-## Deletion
-
-**Settings → Data & privacy → Delete all my data** removes every event, note, funnel,
-and alert record for the project. Your project and API keys survive; everything derived
-from customer activity does not. It requires the write key — the dashboard's read key
-alone can never do this. API: `DELETE /api/v1/projects/{id}/data`.
-
-## Where data lives & what's next
-
-- Today: single-region hosting (US), SQLite/Postgres depending on deployment.
-- On the roadmap as revenue justifies it: EU data residency, SOC 2 Type II.
-- The tracker is open source (`packages/tracker`) — 2.3KB, no cookies, no fingerprinting,
-  auditable by anyone.
+Existing revenue reports show positive gross recorded amounts by currency; no FX conversion, net revenue, refunds, MRR, or financial assurance. Source attribution uses recorded session tags; unlinked server events are unattributed. Payment expansion is deferred. Optional model confidence describes a query-path heuristic, not answer accuracy. Model/SQL caveats: [SQL guide](agentic-analytics.md).

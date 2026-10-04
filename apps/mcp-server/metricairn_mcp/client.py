@@ -1,4 +1,4 @@
-"""Thin typed client for the AgentLens API, configured via environment."""
+"""Thin typed client for the Metricairn API, configured via environment."""
 
 from __future__ import annotations
 
@@ -7,18 +7,33 @@ import time
 
 import httpx
 
-API_URL = os.environ.get("AGENTLENS_API_URL", "http://localhost:8000").rstrip("/")
-READ_KEY = os.environ.get("AGENTLENS_READ_KEY", "")
-WRITE_KEY = os.environ.get("AGENTLENS_WRITE_KEY", "")
+
+def env(name, default=""):
+    return os.environ.get(f"METRICAIRN_{name}", os.environ.get(f"AGENTLENS_{name}", default))
 
 
-class AgentLensClient:
-    def __init__(self, api_url: str = API_URL, read_key: str = READ_KEY, write_key: str = WRITE_KEY):
+API_URL = env("API_URL", "http://localhost:8000").rstrip("/")
+READ_KEY = env("READ_KEY")
+MANAGEMENT_KEY = env("MANAGEMENT_KEY")
+WRITE_KEY = env("WRITE_KEY")
+
+
+class MetricairnClient:
+    def __init__(
+        self,
+        api_url: str = API_URL,
+        read_key: str = READ_KEY,
+        write_key: str = WRITE_KEY,
+        management_key: str = MANAGEMENT_KEY,
+    ):
         self.api_url = api_url.rstrip("/")
         self.read_key = read_key
         self.write_key = write_key
+        self.management_key = management_key
         self._project_id: str | None = None
-        self._http = httpx.Client(timeout=30, trust_env=False)  # bypass env proxies for localhost API
+        self._http = httpx.Client(
+            timeout=30, trust_env=False
+        )  # bypass env proxies for localhost API
 
     # -- read helpers -----------------------------------------------------
     def _get(self, path: str, params: dict | None = None) -> dict | list:
@@ -42,11 +57,59 @@ class AgentLensClient:
     def metrics_catalog(self):
         return self._get("/api/v1/query/metrics")
 
+    def run_query(self, plan: dict):
+        return self._post("/api/v1/query/run", plan)
+
+    def investigate(self, plan: dict):
+        return self._post("/api/v1/investigations/run", plan)
+
+    def goals(self):
+        return self._get("/api/v1/goals")
+
+    def goal_report(self, goal_id: str, days: int):
+        return self._get(f"/api/v1/goals/{goal_id}/report", _range(days))
+
+    def retention(self, days: int, event_name: str | None = None):
+        return self._get(
+            "/api/v1/query/retention",
+            _range(days) | ({"event_name": event_name} if event_name else {}),
+        )
+
+    def investigations(self):
+        return self._get("/api/v1/investigations")
+
+    def investigation(self, investigation_id: str):
+        return self._get(f"/api/v1/investigations/{investigation_id}")
+
+    def _manage(self, method: str, path: str, body: dict):
+        if not self.management_key:
+            raise ValueError("METRICAIRN_MANAGEMENT_KEY is required")
+        response = self._http.request(
+            method,
+            f"{self.api_url}{path}",
+            json=body,
+            headers={"X-Management-Key": self.management_key},
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def save_investigation(self, title: str, plan: dict):
+        return self._manage("POST", "/api/v1/investigations", {"title": title, "plan": plan})
+
+    def review_investigation(self, investigation_id: str, status: str, note: str):
+        return self._manage(
+            "PATCH", f"/api/v1/investigations/{investigation_id}", {"status": status, "note": note}
+        )
+
     def timeseries(self, metric: str, days: int, interval: str = "day"):
-        return self._get("/api/v1/query/timeseries", {"metric": metric, "interval": interval, **_range(days)})
+        return self._get(
+            "/api/v1/query/timeseries", {"metric": metric, "interval": interval, **_range(days)}
+        )
 
     def breakdown(self, dimension: str, days: int, limit: int = 10):
-        return self._get("/api/v1/query/breakdown", {"dimension": dimension, "limit": limit, **_range(days)})
+        return self._get(
+            "/api/v1/query/breakdown", {"dimension": dimension, "limit": limit, **_range(days)}
+        )
 
     def dimension_values(self, dimension: str, days: int):
         return self._get("/api/v1/query/dimensions", {"dimension": dimension, **_range(days)})
@@ -56,6 +119,9 @@ class AgentLensClient:
 
     def revenue(self, days: int):
         return self._get("/api/v1/query/revenue", _range(days))
+
+    def compare(self, days: int):
+        return self._get("/api/v1/query/compare", _range(days))
 
     def anomalies(self, days: int):
         return self._get("/api/v1/query/anomalies", _range(days))
@@ -79,9 +145,8 @@ class AgentLensClient:
         return self._get(f"/api/v1/projects/{self.project_id()}/data/health")
 
     # -- timeline notes ------------------------------------------------------
-    # Notes are annotations (not analytics data), so the API accepts the read
-    # key for them — same as the dashboard. The MCP *tool* is still opt-in
-    # (see server.py): this method is just the transport.
+    # Reading uses the read key. Writing additionally requires the private
+    # management key and an opt-in tool registration in server.py.
     def project_id(self) -> str:
         if not self._project_id:
             me = self._get("/api/v1/projects/me")
@@ -98,7 +163,15 @@ class AgentLensClient:
             raise ValueError("note text is empty")
         if len(text) > 500:
             raise ValueError("note too long (max 500 chars)")
-        return self._post(f"/api/v1/projects/{self.project_id()}/notes", {"text": text})
+        if not self.management_key:
+            raise ValueError("METRICAIRN_MANAGEMENT_KEY is required to write notes")
+        r = self._http.post(
+            f"{self.api_url}/api/v1/projects/{self.project_id()}/notes",
+            json={"text": text},
+            headers={"X-Management-Key": self.management_key},
+        )
+        r.raise_for_status()
+        return r.json()
 
     # -- direction-2: the server observes its own usage --------------------
     def report_tool_call(self, tool: str, duration_ms: float, success: bool) -> None:
@@ -106,14 +179,18 @@ class AgentLensClient:
         if not self.write_key:
             return
         try:
-            httpx.post(
+            self._http.post(
                 f"{self.api_url}/api/v1/ingest",
                 json={
                     "events": [
                         {
                             "name": "mcp_tool_call",
-                            "url": "mcp://agentlens",
-                            "props": {"tool": tool, "duration_ms": round(duration_ms, 1), "success": success},
+                            "url": "mcp://metricairn",
+                            "props": {
+                                "tool": tool,
+                                "duration_ms": round(duration_ms, 1),
+                                "success": success,
+                            },
                         }
                     ]
                 },
@@ -127,12 +204,14 @@ class AgentLensClient:
 def _range(days: int) -> dict:
     from datetime import datetime, timedelta, timezone
 
+    if not 1 <= days <= 366:
+        raise ValueError("days must be between 1 and 366")
     end = datetime.now(timezone.utc)
     start = end - timedelta(days=days)
     return {"date_from": start.isoformat(), "date_to": end.isoformat()}
 
 
-def timed_report(client: AgentLensClient, tool: str, fn, *args, **kwargs):
+def timed_report(client: MetricairnClient, tool: str, fn, *args, **kwargs):
     """Run fn, report usage, re-raise on error."""
     start = time.perf_counter()
     try:

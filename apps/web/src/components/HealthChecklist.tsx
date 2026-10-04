@@ -18,7 +18,10 @@ export function HealthChecklist({ checks }: { checks: HealthCheck[] }) {
   return (
     <div className="space-y-1.5">
       {checks.map((c) => (
-        <div key={c.key} className={`flex items-start gap-2.5 rounded-lg border px-3 py-2 ${ROW[c.status]}`}>
+        <div
+          key={c.key}
+          className={`flex items-start gap-2.5 rounded-lg border px-3 py-2 ${ROW[c.status]}`}
+        >
           <span className="mt-0.5">{ICON[c.status]}</span>
           <div>
             <p className="text-xs font-medium text-slate-800">{c.label}</p>

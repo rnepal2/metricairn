@@ -3,16 +3,15 @@
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
 from app.core.database import Base, get_db
 from app.core.security import _hash
 from app.main import create_app
 from app.models import AlertChannel, ApiKey, DigestSetting, Event, Funnel, Project
 from app.services import digest as digest_svc
 from app.services import notify
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 TEST_DB = "sqlite:///./data/test_digest.db"
 
@@ -38,8 +37,24 @@ def project(db):
     db.add(p)
     db.commit()
     db.refresh(p)
-    db.add(ApiKey(project_id=p.id, key_hash=_hash("alw_test"), key_prefix="alw_test", name="w", scopes="write"))
-    db.add(ApiKey(project_id=p.id, key_hash=_hash("alr_test"), key_prefix="alr_test", name="r", scopes="read"))
+    db.add(
+        ApiKey(
+            project_id=p.id,
+            key_hash=_hash("alw_test"),
+            key_prefix="alw_test",
+            name="w",
+            scopes="manage",
+        )
+    )
+    db.add(
+        ApiKey(
+            project_id=p.id,
+            key_hash=_hash("alr_test"),
+            key_prefix="alr_test",
+            name="r",
+            scopes="read",
+        )
+    )
     db.commit()
     return p
 
@@ -54,7 +69,7 @@ def _client(db):
     return TestClient(app)
 
 
-W = {"X-Write-Key": "alw_test"}
+W = {"X-Management-Key": "alw_test"}
 R = {"X-Read-Key": "alr_test"}
 
 
@@ -90,6 +105,7 @@ def _seed_week(db, project_id, days_ago_start, days_ago_end, visitors_per_day, r
 
 # ---------- unit: due logic ----------
 
+
 def test_last_slot_and_is_due():
     # Monday 2026-10-05 12:00 UTC is a slot for weekday=0, hour=12.
     monday = datetime(2026, 10, 5, 15, 0, tzinfo=timezone.utc)
@@ -116,14 +132,20 @@ def test_last_slot_and_is_due():
 
 # ---------- unit: compilation ----------
 
+
 def test_compile_weekly(db, project):
     # Prior week: 10 visitors/day, $50/day. This week: 20/day, $100/day.
     # (Revenue events carry distinct visitor ids, so they count as visitors too.)
     _seed_week(db, project.id, 13, 7, 10, 50.0)
     _seed_week(db, project.id, 6, 0, 20, 100.0)
 
-    db.add(Funnel(project_id=project.id, name="Signup → Paid",
-                  steps=[{"kind": "page", "value": "/"}, {"kind": "event", "value": "signup"}]))
+    db.add(
+        Funnel(
+            project_id=project.id,
+            name="Signup → Paid",
+            steps=[{"kind": "page", "value": "/"}, {"kind": "event", "value": "signup"}],
+        )
+    )
     db.commit()
 
     out = digest_svc.compile_weekly(db, project.id)
@@ -143,19 +165,24 @@ def test_compile_weekly_empty_project(db, project):
 
 # ---------- API ----------
 
+
 def test_digest_settings_crud(db, project):
     c = _client(db)
     r = c.get("/api/v1/digest/settings", headers=R)
     assert r.json()["enabled"] is False  # no setting yet
 
-    r = c.put("/api/v1/digest/settings", headers=W, json={"enabled": True, "weekday": 0, "hour_utc": 12})
+    r = c.put(
+        "/api/v1/digest/settings", headers=W, json={"enabled": True, "weekday": 0, "hour_utc": 12}
+    )
     assert r.status_code == 200, r.text
     assert r.json()["enabled"] is True
 
     r = c.get("/api/v1/digest/settings", headers=R)
     assert r.json()["weekday"] == 0
 
-    r = c.put("/api/v1/digest/settings", headers=W, json={"enabled": True, "weekday": 9, "hour_utc": 12})
+    r = c.put(
+        "/api/v1/digest/settings", headers=W, json={"enabled": True, "weekday": 9, "hour_utc": 12}
+    )
     assert r.status_code == 422
 
 

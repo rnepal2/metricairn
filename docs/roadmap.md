@@ -1,32 +1,14 @@
 # Roadmap
 
-Ordered by revenue leverage for a solo developer. v1 is the demo-ready core.
+The implemented core remains free and MIT-licensed. Priorities are hypotheses, not promised delivery dates.
 
-## v1.1 — Conversion essentials
-- [ ] Goals (define once: "signup completed" — reused across dashboard, funnels, ask)
-- [ ] UTM/campaign comparison view ("spend vs revenue" table)
-- [x] Weekly email digest (top movers + anomalies) — delivered to alert channels
-- [x] Segment-aware funnels (`?segment_by=device`, dashboard comparison, NL "which device converts best")
-- [x] First-party tracker proxy (docs + `/api/v1/ingest/ping` verification)
-- [ ] CSV export on every table
+| Next | Why | Acceptance signal |
+|---|---|---|
+| Framework install recipes + onboarding diagnostics | Reduce time to the first useful event | New users install a tracker and goal without maintainer help |
+| Investigation task benchmark | Test the claimed workflow edge | Reproducible task results against existing tools, including failures |
+| Release markers + weekday-matched comparisons | Make change analysis more useful | Deployment checks show coverage and uncertainty without causal claims |
+| Event contracts + schema drift | Detect collection failures before analysis | Missing/changed instrumentation produces actionable checks |
+| Read-only analytics-store adapter | Let teams try without migrating | Existing-store users complete the same investigation workflow |
+| Formal migrations, retention jobs, pagination, rollups | Make larger deployments supportable | Restore/migration drills and measured scale targets |
 
-## v1.2 — Make the agent smarter
-- [ ] `compare` MCP tool (period-over-period with significance note)
-- [ ] Saved questions: pin ask results to the dashboard
-- [x] Anomaly explanations ("revenue dipped because Google traffic fell 40%") — explain action + agent-written timeline notes
-- [x] Slack webhook on anomalies — alert channels (Slack + email) with rules, cooldowns, delivery log
-
-## v1.3 — Scale the engine
-- [ ] Hourly/daily materialized rollups (same service interface; SQLite→Postgres path already abstracted)
-- [ ] Server-side CAPI forwarding (Meta/Google Ads) — ad-blocker-proof attribution loop
-- [ ] Bot-score filtering v2
-
-## v2 — Team & money
-- [ ] Multi-user auth, roles, per-seat pricing
-- [ ] Hosted MCP (OAuth) — one-click connect, no local server
-- [ ] Usage-based billing: events metered, generous free tier (the DataFast/Web3Forms playbook)
-- [ ] Company identification for B2B (the ObserviX gap: "which companies visited")
-
-## Explicit non-goals
-Session replay and heatmaps (Matomo owns it; heavy infra), A/B testing engine,
-being a CDP. Stay the lightweight, revenue-first, agent-native wedge.
+Hosted identity/OAuth, replay, flags, experimentation, and payment/billing expansion are outside the current release. Retain the scope of a small, operable analytics investigator until usage supports expanding it.

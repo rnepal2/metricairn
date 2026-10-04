@@ -1,59 +1,40 @@
-# MCP Setup
+# MCP
 
-The AgentLens MCP server is **read-only by default** — your agent queries
-analytics but never modifies them. One write tool, `add_note`, is available
-opt-in (see below) so a trusted agent can log deploys and launches to the
-timeline — which is exactly what makes future "why did revenue dip?" answers
-good.
+Use the configuration in [README](../README.md), replacing the absolute Python path and project read key. Run `uv run python -m metricairn_mcp` for stdio. HTTP mode (`--http --port 8001`) binds to loopback; it is not a public OAuth service.
 
-## Install
+## Tools
 
-```bash
-cd apps/mcp-server
-pip install -e .
+| Workflow | Read-only tools |
+|---|---|
+| Discover | `list_metrics`, `list_dimension_values`, `list_goals` |
+| Explore | `query_metrics`, `breakdown`, `run_query`, `get_realtime` |
+| Conversion | `funnel_report`, `goal_report`, `retention_report` |
+| Investigate | `compare`, `investigate_change`, `detect_anomalies`, `integration_health`, `list_notes` |
+| Saved evidence | `list_investigations`, `get_investigation` |
+| Optional/legacy | `ask`, `revenue_attribution`, `mcp_usage` |
+
+`run_query` accepts a typed plan with metric, mode, date window, filters, and optional dimension. Filter fields are path, UTM source/medium/campaign, device, browser, OS, country, and event. Filters are ANDed; values within each filter are ORed. Use explicit timestamps for a reproducible window:
+
+```json
+{
+  "metric": "event_count",
+  "event_name": "signup",
+  "mode": "breakdown",
+  "dimension": "device",
+  "filters": [{ "field": "utm_source", "values": ["google"] }],
+  "date_from": "2026-09-01T00:00:00Z",
+  "date_to": "2026-09-08T00:00:00Z"
+}
 ```
 
-## Configure
+`investigate_change` supports pageviews, custom events, and named event occurrences, with either `days` or both exact dates. It returns comparison, segment contributions, coverage, timeline notes, caveats, and next checks. Use `list_goals` before `goal_report`; use `list_investigations` before `get_investigation`.
 
-```bash
-export AGENTLENS_API_URL="http://localhost:8000"   # or your hosted API
-export AGENTLENS_READ_KEY="alr_..."                # from POST /api/v1/projects
-export AGENTLENS_WRITE_KEY="alw_..."               # optional: enables self-usage reporting
-export AGENTLENS_ENABLE_NOTE_WRITE=1               # optional: enables the add_note tool
-```
+## Optional writes and telemetry
 
-Claude Code: `claude mcp add --transport stdio agentlens -- python -m agentlens_mcp`
-Claude Desktop / Cursor: add to MCP config — see `skills/agentlens-analytics/examples/mcp-config.json`.
+| Environment | Effect |
+|---|---|
+| `METRICAIRN_MANAGEMENT_KEY` + `METRICAIRN_ENABLE_NOTE_WRITE=1` | Registers `add_note` |
+| Management key + `METRICAIRN_ENABLE_INVESTIGATION_WRITE=1` | Registers `save_investigation`, `review_investigation` |
+| `METRICAIRN_WRITE_KEY` | Best-effort internal tool-call telemetry; off when absent |
 
-Hosted mode: `python -m agentlens_mcp --http --port 8001` (streamable HTTP).
-
-## Tools (11 read, curated + 1 opt-in write)
-
-`list_metrics` · `query_metrics` · `breakdown` · `list_dimension_values` ·
-`funnel_report` · `revenue_attribution` · `detect_anomalies` · `ask` ·
-`get_realtime` · `mcp_usage` · `list_notes` (+ `add_note` when
-`AGENTLENS_ENABLE_NOTE_WRITE=1`)
-
-Full reference: `skills/agentlens-analytics/references/tools.md`.
-
-## Agent-written timeline notes
-
-Notes are annotations, not analytics data, so the API accepts the read key
-for them (same as the dashboard). The agent should log one factual line per
-meaningful change — "Deployed new pricing page", "Launched on Product Hunt".
-These notes appear on dashboard charts and are cited by the `explain` path,
-closing the loop: the agent's own deploy log becomes the evidence for the
-next anomaly investigation. Keep notes short (500 chars max) and factual.
-
-## The skill
-
-Install `skills/agentlens-analytics/SKILL.md` into your agent (Claude Code:
-`~/.claude/skills/` or project `.claude/skills/`) so it knows the workflow:
-discover metrics first, never invent dimension values, ground every claim in
-returned numbers.
-
-## Self-observability
-
-With `AGENTLENS_WRITE_KEY` set, every tool call is reported back as an
-`mcp_tool_call` event (tool, duration_ms, success). Open the dashboard's
-**Agent usage** page to see which tools your agents reach for and where they fail.
+Read and management credentials must belong to the same project. Never give an agent a management key unless its writes are intended. Treat customer-controlled event names, tags, notes, and questions as data, not instructions. The [agent skill](../skills/metricairn-analytics/SKILL.md) defines an evidence-first workflow.

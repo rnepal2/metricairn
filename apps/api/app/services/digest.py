@@ -32,8 +32,8 @@ def _wow(cur: float, prev: float) -> str:
     return f"{pct:+.0f}%"
 
 
-def _money(v: float) -> str:
-    return f"${v:,.0f}"
+def _money(v: float, currency: str = "USD") -> str:
+    return f"{v:,.2f} {currency}"
 
 
 def compile_weekly(db: Session, project_id: str, end: datetime | None = None) -> dict:
@@ -42,20 +42,36 @@ def compile_weekly(db: Session, project_id: str, end: datetime | None = None) ->
     week_start = now - timedelta(days=7)
     prev_start = now - timedelta(days=14)
 
-    cur = analytics.overview(db, project_id, week_start, now)
-    prev = analytics.overview(db, project_id, prev_start, week_start)
+    currency = analytics._currency(db, project_id, prev_start, now)
+    cur = analytics.overview(db, project_id, week_start, now, currency)
+    prev = analytics.overview(db, project_id, prev_start, week_start, currency)
 
     anomalies = anomaly.detect(db, project_id, week_start, now)
 
-    camps = analytics.breakdown(db, project_id, "utm_campaign", week_start, now, limit=50)
+    camps = analytics.breakdown(
+        db,
+        project_id,
+        "utm_campaign",
+        week_start,
+        now,
+        limit=50,
+        currency=currency,
+        order_by="revenue",
+    )
     top_camps = sorted(
-        [(r["value"], r["revenue"]) for r in camps if r["value"] != "(not set)" and r["revenue"] > 0],
+        [
+            (r["value"], r["revenue"])
+            for r in camps
+            if r["value"] != "(not set)" and r["revenue"] > 0
+        ],
         key=lambda x: x[1],
         reverse=True,
     )[:3]
 
     funnel_line = None
-    funnel = db.query(Funnel).filter(Funnel.project_id == project_id).order_by(Funnel.created_at).first()
+    funnel = (
+        db.query(Funnel).filter(Funnel.project_id == project_id).order_by(Funnel.created_at).first()
+    )
     if funnel and funnel.steps:
         rep = analytics.funnel_report(db, project_id, funnel.steps, week_start, now)
         if rep and rep[0]["visitors"]:
@@ -65,9 +81,8 @@ def compile_weekly(db: Session, project_id: str, end: datetime | None = None) ->
                 for i in range(1, len(rep))
             ]
             worst = min(leaks, key=lambda x: x[1]) if leaks else None
-            funnel_line = (
-                f"{funnel.name}: {conv:.1%} end-to-end"
-                + (f"; biggest leak {worst[0]} ({worst[1]:.0%} continue)" if worst else "")
+            funnel_line = f"{funnel.name}: {conv:.1%} end-to-end" + (
+                f"; biggest leak {worst[0]} ({worst[1]:.0%} continue)" if worst else ""
             )
 
     project = db.query(Project).filter(Project.id == project_id).first()
@@ -80,29 +95,44 @@ def compile_weekly(db: Session, project_id: str, end: datetime | None = None) ->
         "The week in numbers (vs prior week):",
         f"• Visitors: {cur['visitors']:,} ({_wow(cur['visitors'], prev['visitors'])} WoW)",
         f"• Pageviews: {cur['pageviews']:,} ({_wow(cur['pageviews'], prev['pageviews'])} WoW)",
-        f"• Revenue: {_money(cur['revenue'])} ({_wow(cur['revenue'], prev['revenue'])} WoW)",
+        f"• Revenue: {_money(cur['revenue'], cur['revenue_currency'])} ({_wow(cur['revenue'], prev['revenue'])} WoW)",
         "",
     ]
     if anomalies:
         lines.append(f"Anomalies ({len(anomalies)}):")
         for a in anomalies[:5]:
             date = a["date"] + (f" → {a['date_end']}" if a.get("date_end") else "")
-            val = _money(a["value"]) if a["metric"] == "revenue" else f"{a['value']:,.0f}"
-            exp = _money(a["expected"]) if a["metric"] == "revenue" else f"{a['expected']:,.0f}"
-            lines.append(f"• {a['metric']} {a['direction']} {date}: {val} vs ~{exp} (z={a['z_score']})")
+            val = (
+                _money(a["value"], a.get("currency") or "USD")
+                if a["metric"] == "revenue"
+                else f"{a['value']:,.0f}"
+            )
+            exp = (
+                _money(a["expected"], a.get("currency") or "USD")
+                if a["metric"] == "revenue"
+                else f"{a['expected']:,.0f}"
+            )
+            lines.append(
+                f"• {a['metric']} {a['direction']} {date}: {val} vs ~{exp} (z={a['z_score']})"
+            )
         lines.append("")
     else:
         lines += ["Anomalies: none this week.", ""]
     if top_camps:
         lines.append("Top content by attributed revenue:")
-        lines += [f"• {c}: {_money(r)}" for c, r in top_camps]
+        lines += [f"• {c}: {_money(r, cur['revenue_currency'])}" for c, r in top_camps]
         lines.append("")
     if funnel_line:
         lines += [f"Funnel: {funnel_line}", ""]
-    lines.append("Ask your AI agent \"why\" about any of these for a grounded explanation.")
+    lines.append(
+        f"Revenue is gross recorded payments in {currency}; no FX conversion or recurring-revenue calculation."
+    )
+    if len(analytics.revenue_currencies(db, project_id, prev_start, now)) > 1:
+        lines.append("Multiple currencies exist; totals cover only the selected currency.")
+    lines.append('Ask your AI agent "why" about any of these for a grounded explanation.')
 
     body = "\n".join(lines)
-    subject = f"AgentLens weekly — {name}: {_money(cur['revenue'])} revenue ({_wow(cur['revenue'], prev['revenue'])} WoW)"
+    subject = f"Metricairn weekly — {name}: {_money(cur['revenue'], cur['revenue_currency'])} revenue ({_wow(cur['revenue'], prev['revenue'])} WoW)"
     return {
         "subject": subject,
         "body": body,

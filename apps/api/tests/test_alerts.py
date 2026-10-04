@@ -3,15 +3,14 @@
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
 from app.core.database import Base, get_db
 from app.core.security import _hash
 from app.main import create_app
 from app.models import AlertChannel, AlertDelivery, ApiKey, Event, Project
 from app.services import alerting, notify
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 TEST_DB = "sqlite:///./data/test_alerts.db"
 
@@ -37,8 +36,24 @@ def project(db):
     db.add(p)
     db.commit()
     db.refresh(p)
-    db.add(ApiKey(project_id=p.id, key_hash=_hash("alw_test"), key_prefix="alw_test", name="w", scopes="write"))
-    db.add(ApiKey(project_id=p.id, key_hash=_hash("alr_test"), key_prefix="alr_test", name="r", scopes="read"))
+    db.add(
+        ApiKey(
+            project_id=p.id,
+            key_hash=_hash("alw_test"),
+            key_prefix="alw_test",
+            name="w",
+            scopes="manage",
+        )
+    )
+    db.add(
+        ApiKey(
+            project_id=p.id,
+            key_hash=_hash("alr_test"),
+            key_prefix="alr_test",
+            name="r",
+            scopes="read",
+        )
+    )
     db.commit()
     return p
 
@@ -53,7 +68,7 @@ def _client(db):
     return TestClient(app)
 
 
-W = {"X-Write-Key": "alw_test"}
+W = {"X-Management-Key": "alw_test"}
 R = {"X-Read-Key": "alr_test"}
 
 
@@ -74,6 +89,7 @@ def _revenue_day(db, project_id, days_ago, amount):
 
 # ---------- unit: rule matching & message formatting ----------
 
+
 def test_rule_matches():
     a = {"metric": "revenue", "direction": "dip", "z_score": -4.5, "date": "2026-01-01"}
     assert alerting.rule_matches(a, {**alerting.DEFAULT_RULE})
@@ -85,36 +101,67 @@ def test_rule_matches():
 
 def test_format_anomaly_message():
     a = {
-        "metric": "revenue", "direction": "dip", "date": "2026-09-26",
-        "date_end": "2026-09-29", "value": 0, "expected": 1473.0, "z_score": -4.98,
+        "metric": "revenue",
+        "direction": "dip",
+        "date": "2026-09-26",
+        "date_end": "2026-09-29",
+        "value": 0,
+        "expected": 1473.0,
+        "z_score": -4.98,
     }
     subject, body = notify.format_anomaly_message("Billwise", [a])
     assert "Billwise" in subject
-    assert "$0 vs ~$1,473 expected" in body
+    assert "0.00 USD vs ~1,473.00 USD expected" in body
     subject, body = notify.format_anomaly_message("Billwise", [], test=True)
     assert "test" in subject.lower()
 
 
 def test_anomaly_key():
-    assert alerting.anomaly_key({"metric": "revenue", "direction": "dip", "date": "2026-01-01"}) == "revenue:dip:2026-01-01"
-    assert alerting.anomaly_key({"metric": "revenue", "direction": "dip", "date": "2026-01-01", "date_end": "2026-01-03"}) == "revenue:dip:2026-01-01:2026-01-03"
+    assert (
+        alerting.anomaly_key({"metric": "revenue", "direction": "dip", "date": "2026-01-01"})
+        == "revenue:dip:2026-01-01"
+    )
+    assert (
+        alerting.anomaly_key(
+            {
+                "metric": "revenue",
+                "direction": "dip",
+                "date": "2026-01-01",
+                "date_end": "2026-01-03",
+            }
+        )
+        == "revenue:dip:2026-01-01:2026-01-03"
+    )
 
 
 # ---------- API: channels & rules ----------
 
+
 def test_channel_crud(db, project):
     c = _client(db)
-    r = c.post("/api/v1/alerts/channels", headers=W, json={"kind": "email", "target": "maya@example.com"})
+    r = c.post(
+        "/api/v1/alerts/channels", headers=W, json={"kind": "email", "target": "maya@example.com"}
+    )
     assert r.status_code == 200, r.text
     assert r.json()["kind"] == "email"
 
-    r = c.post("/api/v1/alerts/channels", headers=W, json={"kind": "email", "target": "not-an-email"})
+    r = c.post(
+        "/api/v1/alerts/channels", headers=W, json={"kind": "email", "target": "not-an-email"}
+    )
     assert r.status_code == 422
-    r = c.post("/api/v1/alerts/channels", headers=W, json={"kind": "slack", "target": "https://example.com/x"})
+    r = c.post(
+        "/api/v1/alerts/channels",
+        headers=W,
+        json={"kind": "slack", "target": "https://example.com/x"},
+    )
     assert r.status_code == 422
 
     # read key can list but webhook URL is masked
-    r = c.post("/api/v1/alerts/channels", headers=W, json={"kind": "slack", "target": "https://hooks.slack.com/services/T000/B000/SECRET123456"})
+    r = c.post(
+        "/api/v1/alerts/channels",
+        headers=W,
+        json={"kind": "slack", "target": "https://hooks.slack.com/services/T000/B000/SECRET123456"},
+    )
     cid = r.json()["id"]
     r = c.get("/api/v1/alerts/channels", headers=R)
     assert r.status_code == 200
@@ -130,7 +177,11 @@ def test_channel_crud(db, project):
 
 def test_rule_crud(db, project):
     c = _client(db)
-    r = c.post("/api/v1/alerts/rules", headers=W, json={"name": "Revenue dips", "metric": "revenue", "direction": "dip", "min_z": 3.0})
+    r = c.post(
+        "/api/v1/alerts/rules",
+        headers=W,
+        json={"name": "Revenue dips", "metric": "revenue", "direction": "dip", "min_z": 3.0},
+    )
     assert r.status_code == 200, r.text
     rid = r.json()["id"]
     r = c.get("/api/v1/alerts/rules", headers=R)
@@ -141,7 +192,9 @@ def test_rule_crud(db, project):
 
 def test_test_channel_endpoint(db, project, monkeypatch):
     c = _client(db)
-    r = c.post("/api/v1/alerts/channels", headers=W, json={"kind": "email", "target": "maya@example.com"})
+    r = c.post(
+        "/api/v1/alerts/channels", headers=W, json={"kind": "email", "target": "maya@example.com"}
+    )
     cid = r.json()["id"]
     monkeypatch.setattr(notify, "deliver", lambda *a: (True, "mock"))
     r = c.post(f"/api/v1/alerts/channels/{cid}/test", headers=W)
@@ -151,6 +204,7 @@ def test_test_channel_endpoint(db, project, monkeypatch):
 
 
 # ---------- engine: check_project end to end ----------
+
 
 def test_check_project_sends_and_respects_cooldown(db, project, monkeypatch):
     # 36 steady days of $100, then 3 days of $0 -> a clear revenue dip.
@@ -163,7 +217,9 @@ def test_check_project_sends_and_respects_cooldown(db, project, monkeypatch):
     db.commit()
 
     sent = []
-    monkeypatch.setattr(notify, "deliver", lambda kind, target, s, b: sent.append((s, b)) or (True, "mock"))
+    monkeypatch.setattr(
+        notify, "deliver", lambda kind, target, s, b: sent.append((s, b)) or (True, "mock")
+    )
 
     summary = alerting.check_project(db, project.id)
     assert summary["checked"] is True

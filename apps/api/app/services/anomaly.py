@@ -77,8 +77,11 @@ def detect(
     # same-weekday baseline even on short query windows.
     ext_start = start - timedelta(weeks=_BASELINE_WEEKS)
     anomalies: list[dict] = []
+    currency = analytics._currency(db, project_id, start, end)
     for metric in ("pageviews", "revenue"):
-        series = analytics.timeseries(db, project_id, metric, ext_start, end, interval="day")
+        series = analytics.timeseries(
+            db, project_id, metric, ext_start, end, interval="day", currency=currency
+        )
         dates = [p["t"][:10] for p in series]
         values = [p["value"] for p in series]
 
@@ -106,22 +109,24 @@ def detect(
                 z = 0.0
             scores[i] = (z, med)
 
-        ordered = [scores[i] for i in sorted(scores)]
+        series_by_pos = list(range(min(scores), max(scores) + 1)) if scores else []
+        ordered = [scores.get(i, (0.0, 0.0)) for i in series_by_pos]
         # Strong single-day flags are reported as-is and never absorbed into runs.
         blocked = {pos for pos, (z, _med) in enumerate(ordered) if abs(z) >= z_threshold}
         runs = _sustained_runs(ordered, blocked)
         run_pos = {p for r in runs for p in r}  # positions within `ordered`
-        series_by_pos = sorted(scores)  # ordered position -> series index
+        # Include unscored dates as zero-score breaks; runs require consecutive days.
 
         for pos, i in enumerate(series_by_pos):
             if pos in run_pos:
                 continue
-            z, med = scores[i]
+            z, med = scores.get(i, (0.0, 0.0))
             if pos in blocked and values[i] != med:
                 anomalies.append(
                     {
                         "date": dates[i],
                         "metric": metric,
+                        "currency": currency if metric == "revenue" else None,
                         "value": values[i],
                         "expected": round(med, 2),
                         "z_score": round(z, 2),
@@ -140,6 +145,7 @@ def detect(
                     "date_end": dates[idx[-1]],
                     "days": len(idx),
                     "metric": metric,
+                    "currency": currency if metric == "revenue" else None,
                     "value": round(sum(values[i] for i in idx), 2),
                     "expected": round(sum(meds), 2),
                     "z_score": round(min(zs, key=abs), 2),

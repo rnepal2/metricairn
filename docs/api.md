@@ -1,121 +1,39 @@
-# API Reference (v1)
+# API
 
-Base URL: `http://localhost:8000`. Interactive docs: `GET /docs` (Swagger).
+Interactive schemas are served at `/docs`; OpenAPI is at `/openapi.json`. All endpoints below use `/api/v1`. Keys select the project; clients cannot override analytical tenant scope.
 
-Auth: `X-Write-Key: alw_…` for ingest, `X-Read-Key: alr_…` for everything else.
-Keys are project-scoped — you can only ever see your own project's data.
-
-## Projects
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| POST | `/api/v1/projects` | — | Create project; returns `write_key` + `read_key` (shown once) |
-| GET | `/api/v1/projects` | — | List projects (id/name/domain only) |
-| GET | `/api/v1/projects/me` | read | Project for this read key (dashboard login) |
-| POST | `/api/v1/projects/{id}/notes` | read | Timeline annotation |
-| GET | `/api/v1/projects/{id}/notes` | read | List annotations |
-
-## Ingest
-
-`POST /api/v1/ingest` (write key). Body: `{"events": [...]}` (max 500/batch).
-Event: `{name, url, referrer, session_id, visitor_id, device, browser, os, country,
-props{}, revenue_amount, revenue_currency, at?}`. `name: "pageview"` for page views;
-`"revenue"` with `revenue_amount` for purchases. UTM params are parsed from `url`
-query strings; the JS tracker persists landing UTMs for the whole session, so
-conversions attribute back to the campaign even when the checkout URL is clean.
-server-side. Works browser-to-server *and* server-to-server (ad-blocker-proof).
-
-`GET /api/v1/ingest/ping` (no auth) — reachability check for first-party proxy
-setups: `curl https://your-domain/al/ingest/ping` should return `{"ok":true}`.
-See `docs/first-party-proxy.md`.
-
-## Query (read key)
-
-| Method | Path | Description |
+| Credential | Header | Capability |
 |---|---|---|
-| GET | `/api/v1/query/overview` | visitors, pageviews, sessions, bounce_rate, avg_session_seconds, events, revenue |
-| GET | `/api/v1/query/timeseries?metric=&interval=` | zero-filled series; metric ∈ visitors\|pageviews\|sessions\|events\|revenue; interval ∈ day\|hour |
-| GET | `/api/v1/query/breakdown?dimension=&limit=` | top values with visitors/pageviews/revenue; dimension ∈ path\|referrer\|utm_source\|utm_medium\|utm_campaign\|device\|browser\|os\|country\|event |
-| GET | `/api/v1/query/dimensions?dimension=` | distinct values a dimension actually takes (for agents) |
-| GET | `/api/v1/query/metrics` | metric/dimension catalog (agent entry point) |
-| GET | `/api/v1/query/realtime` | last-30-min activity |
-| GET | `/api/v1/query/revenue` | total, transactions, revenue_per_visitor, by_source, timeseries |
-| GET | `/api/v1/query/anomalies` | robust anomalies on daily pageviews + revenue (same-weekday median/MAD baseline, sustained multi-day runs, partial current day excluded from dip detection) |
-| GET | `/api/v1/query/mcp-usage` | agent tool-call counts, error rates, recent questions |
+| Tracking | `X-Write-Key` | Collect events only |
+| Read | `X-Read-Key` | Query project data |
+| Management | `X-Management-Key` | Configuration, keys, evidence writes, deletion |
 
-All range queries accept `date_from` / `date_to` (ISO 8601, default last 30 days).
+`POST /projects` returns all three keys once. If configured, creation requires `X-Provisioning-Token`. `GET /projects/me` resolves the read key’s project. `GET /projects` lists only that project.
 
-## Funnels
+| Workflow | Endpoints |
+|---|---|
+| Collect | `POST /ingest` (`{events: [...]}`), `/ingest/events`; `GET /ingest/ping` |
+| Metrics | `GET /query/overview`, `/timeseries`, `/breakdown`, `/dimensions`, `/metrics`, `/realtime`, `/compare`, `/anomalies` |
+| Filtered plans | `POST /query/run` |
+| Goals | `GET/POST /goals`; `GET /goals/{id}/report`; `DELETE /goals/{id}` |
+| Retention | `GET /query/retention` |
+| Investigate | `POST /investigations/run`; `GET/POST /investigations`; `GET/PATCH /investigations/{id}` |
+| Funnels | `GET/POST /funnels`; `GET /funnels/{id}/report`; `DELETE /funnels/{id}` |
+| Context | `GET/POST /projects/{id}/notes` |
+| Keys | `GET/POST /keys`; `DELETE /keys/{id}` |
+| Transparency | `GET /projects/{id}/data/summary`, `/data/health`; `DELETE /projects/{id}/data` |
+| Optional | `/ask`, `/alerts/*`, `/digest/*`, `/query/revenue`, `/query/mcp-usage`, existing `/integrations/*` |
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| POST | `/api/v1/funnels` | read | `{name, steps: [{kind: page\|event, value}]}` |
-| GET | `/api/v1/funnels` | read | List |
-| GET | `/api/v1/funnels/{id}/report` | read | Ordered conversion: per-step visitors, from-start and from-previous rates. `?segment_by=device` adds per-segment tables (top 8 by entry visitors; a visitor's segment is the dimension value on their entry-step event) |
+Analytical GET endpoints accept `date_from`/`date_to` where applicable; realtime accepts `minutes` (1–1440). Breakdown accepts dimension, limit (1–100), and `order_by` (visitors/pageviews/events/revenue). Currency-aware legacy reports accept a three-letter currency. See [metric semantics](trust-and-data.md).
 
-## Ask (natural language)
+## Plans and evidence
 
-`POST /api/v1/ask` (read key): `{"question": "..."}` → `{answer, data, chart?, planner}`.
-`chart` is `{type: timeseries|bar, x_key, y_key, title}` when a visualization fits.
-`planner` is `heuristic` (deterministic fast path) or `agentic_sql` (the LLM wrote SQL against the fixed event schema — validated before trusted). Every question is logged as an `ask` event.
+`POST /query/run` accepts the [MCP plan format](mcp.md): metric, mode (`total`, `timeseries`, `breakdown`), optional dimension, interval (`day`, `hour`), event name, filters, dates, and limit. Unknown fields are rejected. Missing event names/dimensions fail explicitly. Empty results remain valid; breakdown truncation is disclosed.
 
-## Alert delivery
+`POST /investigations/run` uses the same plan but supports additive counts only. `POST /investigations` requires management and `{title, plan}`; it computes and saves immutable evidence. `PATCH /investigations/{id}` accepts `{status, note}` with status `observed`, `investigating`, `resolved`, or `dismissed`; evidence cannot be patched. Lists return the newest 30 summaries by default, up to 100 via `limit`.
 
-Anomaly detection is only useful if someone sees it. Channels get a message
-when a fresh anomaly matches a rule; the in-process scheduler runs the check
-every `SCHEDULER_INTERVAL_MINUTES` (default 30). With no custom rules, a built-in
-default applies: any metric/direction, |z| ≥ 3, 24h cooldown. Cooldowns are
-tracked per (channel, anomaly), and every decision is logged.
+Goals require `{name, event_name}` and management access. Reports require read access. Retention optionally accepts `event_name` for return activity. Project-data deletion removes events, goals, saved evidence, notes, funnels, and delivery configuration/history while preserving the project and keys.
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| POST | `/api/v1/alerts/channels` | write | `{kind: email\|slack, target}` — address or `https://hooks.slack.com/…` webhook |
-| GET | `/api/v1/alerts/channels` | read | List (webhook URLs masked) |
-| DELETE | `/api/v1/alerts/channels/{id}` | write | Remove |
-| POST | `/api/v1/alerts/channels/{id}/test` | write | Send a test message |
-| POST | `/api/v1/alerts/rules` | write | `{name, metric, direction, min_z, cooldown_hours}` |
-| GET | `/api/v1/alerts/rules` | read | List |
-| DELETE | `/api/v1/alerts/rules/{id}` | write | Remove |
-| GET | `/api/v1/alerts/deliveries` | read | Delivery log: sent / failed / skipped |
-| POST | `/api/v1/alerts/check` | write | Run one check cycle now (same as the scheduler) |
+## Collection boundaries
 
-Email delivery uses Resend (`RESEND_API_KEY`, from `ALERTS_FROM_EMAIL`).
-Without it, email attempts are logged as failed with `skipped: RESEND_API_KEY
-not configured` — Slack needs no API key. For multi-worker deployments set
-`SCHEDULER_ENABLED=false` on all but one instance.
-
-## Weekly digest
-
-The Monday-morning email for founders who don't live in dashboards: WoW
-deltas, this week's anomalies, top content by attributed revenue, and the
-funnel headline. Delivered to the project's alert channels (no separate
-channel setup). Schedule is UTC (`hour_utc`, default Monday 12:00 ≈ 7–8am US
-Eastern); the scheduler sends once per slot and never backfills.
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/api/v1/digest/settings` | read | `{enabled, weekday, hour_utc, last_sent_at}` |
-| PUT | `/api/v1/digest/settings` | write | `{enabled, weekday 0–6, hour_utc 0–23}` |
-| POST | `/api/v1/digest/preview` | read | Compile without sending |
-| POST | `/api/v1/digest/send` | write | Send now (requires enabled) |
-
-## Data transparency & deletion
-
-AgentLens only ever sees the events you send us — these endpoints make that
-verifiable. Deleting data keeps the project and its API keys; it removes every
-row derived from customer activity (events, notes, funnels, alert config/history,
-digest settings). A read key can never delete data.
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/api/v1/projects/{id}/data/summary` | read | `{events, notes, funnels, revenue_events, first_event_at, last_event_at, top_events}` |
-| DELETE | `/api/v1/projects/{id}/data` | write | Delete everything; returns per-table counts |
-| GET | `/api/v1/projects/{id}/data/health` | read | Integration health checklist: `{checks: [{key, label, status, detail}], missing}` — is the instrumentation flowing? |
-
-Full trust story: `docs/trust-and-data.md`.
-
-## Integrations
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| POST | `/api/v1/integrations/stripe/webhook?key=alw_…` | write (query) | Opt-in: Stripe-verified `checkout.session.completed` / `invoice.paid` → `revenue` events. Requires `STRIPE_WEBHOOK_SECRET`; 503 when unset. Idempotent on Stripe event id; no PII stored. |
+At most 500 events/request, 1 MiB/body, 8 KiB/event properties. Optional `event_id` deduplicates within a project. Timestamps must be valid and not over five minutes ahead. Arbitrary custom data must be minimized by the sender. Read and management endpoints are never authorized by a public tracking key.

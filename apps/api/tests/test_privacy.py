@@ -2,14 +2,13 @@
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
 from app.core.database import Base, get_db
 from app.core.security import _hash
 from app.main import create_app
 from app.models import ApiKey, Event, Funnel, Note, Project
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 TEST_DB = "sqlite:///./data/test_privacy.db"
 
@@ -30,17 +29,49 @@ def _seed(db):
     db.add(p)
     db.commit()
     db.refresh(p)
-    db.add(ApiKey(project_id=p.id, key_hash=_hash("alw_test"), key_prefix="alw_test", name="w", scopes="write"))
-    db.add(ApiKey(project_id=p.id, key_hash=_hash("alr_test"), key_prefix="alr_test", name="r", scopes="read"))
+    db.add(
+        ApiKey(
+            project_id=p.id,
+            key_hash=_hash("alw_test"),
+            key_prefix="alw_test",
+            name="w",
+            scopes="manage",
+        )
+    )
+    db.add(
+        ApiKey(
+            project_id=p.id,
+            key_hash=_hash("alr_test"),
+            key_prefix="alr_test",
+            name="r",
+            scopes="read",
+        )
+    )
     now = datetime.now(timezone.utc)
     for i in range(5):
-        db.add(Event(project_id=p.id, name="pageview", path="/", visitor_id=f"v{i}",
-                     created_at=now - timedelta(days=i)))
-    db.add(Event(project_id=p.id, name="revenue", revenue_amount=49.0,
-                 revenue_currency="USD", visitor_id="v9", created_at=now))
+        db.add(
+            Event(
+                project_id=p.id,
+                name="pageview",
+                path="/",
+                visitor_id=f"v{i}",
+                created_at=now - timedelta(days=i),
+            )
+        )
+    db.add(
+        Event(
+            project_id=p.id,
+            name="revenue",
+            revenue_amount=49.0,
+            revenue_currency="USD",
+            visitor_id="v9",
+            created_at=now,
+        )
+    )
     db.add(Note(project_id=p.id, text="launched", at=now))
-    db.add(Funnel(project_id=p.id, name="Signup → Paid",
-                  steps=[{"kind": "event", "value": "signup"}]))
+    db.add(
+        Funnel(project_id=p.id, name="Signup → Paid", steps=[{"kind": "event", "value": "signup"}])
+    )
     db.commit()
     return p
 
@@ -55,7 +86,7 @@ def _client(db):
     return TestClient(app)
 
 
-W = {"X-Write-Key": "alw_test"}
+W = {"X-Management-Key": "alw_test"}
 R = {"X-Read-Key": "alr_test"}
 
 
@@ -107,6 +138,6 @@ def test_delete_requires_write_key():
     # no key at all -> 401
     assert c.delete(f"/api/v1/projects/{p.id}/data").status_code == 401
     # read key presented as write key -> 403
-    r = c.delete(f"/api/v1/projects/{p.id}/data", headers={"X-Write-Key": "alr_test"})
+    r = c.delete(f"/api/v1/projects/{p.id}/data", headers={"X-Management-Key": "alr_test"})
     assert r.status_code == 403
     assert db.query(Event).count() == 6  # nothing deleted

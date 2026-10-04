@@ -9,6 +9,7 @@ Alerts page and the `detect_anomalies` MCP tool have something to find.
 
 from __future__ import annotations
 
+import os
 import random
 import sys
 from datetime import datetime, timedelta, timezone
@@ -29,9 +30,14 @@ SOURCES = [
     ("https://www.producthunt.com", "producthunt", 0.06),
     ("https://linkedin.com", "linkedin", 0.06),
 ]
-DEVICES = [("desktop", "Chrome", "Windows", 0.40), ("desktop", "Chrome", "macOS", 0.22),
-           ("mobile", "Safari", "iOS", 0.20), ("mobile", "Chrome", "Android", 0.12),
-           ("desktop", "Firefox", "Linux", 0.04), ("tablet", "Safari", "iOS", 0.02)]
+DEVICES = [
+    ("desktop", "Chrome", "Windows", 0.40),
+    ("desktop", "Chrome", "macOS", 0.22),
+    ("mobile", "Safari", "iOS", 0.20),
+    ("mobile", "Chrome", "Android", 0.12),
+    ("desktop", "Firefox", "Linux", 0.04),
+    ("tablet", "Safari", "iOS", 0.02),
+]
 
 
 def pick(weighted):
@@ -47,13 +53,20 @@ def pick(weighted):
 def main() -> None:
     http = httpx.Client(timeout=60, trust_env=False)  # bypass sandbox egress proxy for localhost
     print(f"→ creating project at {API}")
-    p = http.post(f"{API}/api/v1/projects", json={"name": "Acme SaaS", "domain": "acme.test"}).json()
+    p = http.post(
+        f"{API}/api/v1/projects",
+        headers={"X-Provisioning-Token": os.environ.get("PROVISIONING_TOKEN", "")},
+        json={"name": "Acme SaaS", "domain": "acme.test"},
+    ).json()
     project_id, write_key, read_key = p["id"], p["write_key"], p["read_key"]
     headers = {"X-Write-Key": write_key}
 
     def flush(events: list[dict]) -> None:
+        events = [event for event in events if datetime.fromisoformat(event["at"]) <= now]
         for i in range(0, len(events), 400):  # API caps batches at 500
-            r = http.post(f"{API}/api/v1/ingest", json={"events": events[i : i + 400]}, headers=headers)
+            r = http.post(
+                f"{API}/api/v1/ingest", json={"events": events[i : i + 400]}, headers=headers
+            )
             r.raise_for_status()
 
     now = datetime.now(timezone.utc)
@@ -63,10 +76,10 @@ def main() -> None:
     for ago in range(30, -1, -1):
         day = now - timedelta(days=ago)
         dow = day.weekday()
-        weekly = 0.62 if dow >= 5 else 1.0                      # weekend dip
-        growth = 1 + (30 - ago) * 0.02                          # gentle growth
-        spike = 3.0 if ago == 10 else 1.0                       # launch spike
-        dip = 0.35 if ago == 4 else 1.0                         # outage dip
+        weekly = 0.62 if dow >= 5 else 1.0  # weekend dip
+        growth = 1 + (30 - ago) * 0.02  # gentle growth
+        spike = 3.0 if ago == 10 else 1.0  # launch spike
+        dip = 0.35 if ago == 4 else 1.0  # outage dip
         n_visitors = int(random.gauss(70 * weekly * growth * spike * dip, 8))
         n_visitors = max(5, n_visitors)
 
@@ -84,25 +97,56 @@ def main() -> None:
                 url = f"https://acme.test{path}"
                 if src and random.random() < 0.7:
                     url += f"?utm_source={src}&utm_medium={'cpc' if src == 'google' else 'social'}"
-                batch.append({
-                    "name": "pageview", "url": url, "referrer": ref,
-                    "session_id": s, "visitor_id": v, "device": dev,
-                    "browser": browser, "os": os_, "at": (base_ts + timedelta(minutes=j * 2)).isoformat(),
-                })
+                batch.append(
+                    {
+                        "name": "pageview",
+                        "url": url,
+                        "referrer": ref,
+                        "session_id": s,
+                        "visitor_id": v,
+                        "device": dev,
+                        "browser": browser,
+                        "os": os_,
+                        "at": (base_ts + timedelta(minutes=j * 2)).isoformat(),
+                    }
+                )
             if hit_pricing and random.random() < 0.12:
-                batch.append({"name": "signup", "url": "https://acme.test/signup", "referrer": "",
-                              "session_id": s, "visitor_id": v, "device": dev,
-                              "at": (base_ts + timedelta(minutes=n_pv * 2 + 1)).isoformat()})
+                batch.append(
+                    {
+                        "name": "signup",
+                        "url": "https://acme.test/signup",
+                        "referrer": "",
+                        "session_id": s,
+                        "visitor_id": v,
+                        "device": dev,
+                        "at": (base_ts + timedelta(minutes=n_pv * 2 + 1)).isoformat(),
+                    }
+                )
                 if random.random() < 0.45:
                     plan = 99 if random.random() < 0.3 else 29
-                    batch.append({"name": "revenue", "url": "https://acme.test/checkout",
-                                  "session_id": s, "visitor_id": v, "device": dev,
-                                  "revenue_amount": plan, "revenue_currency": "USD",
-                                  "at": (base_ts + timedelta(minutes=n_pv * 2 + 3)).isoformat()})
+                    batch.append(
+                        {
+                            "name": "revenue",
+                            "url": "https://acme.test/checkout",
+                            "session_id": s,
+                            "visitor_id": v,
+                            "device": dev,
+                            "revenue_amount": plan,
+                            "revenue_currency": "USD",
+                            "at": (base_ts + timedelta(minutes=n_pv * 2 + 3)).isoformat(),
+                        }
+                    )
             if random.random() < 0.05:
-                batch.append({"name": "docs_search", "url": "https://acme.test/docs",
-                              "session_id": s, "visitor_id": v, "device": dev,
-                              "at": (base_ts + timedelta(minutes=1)).isoformat()})
+                batch.append(
+                    {
+                        "name": "docs_search",
+                        "url": "https://acme.test/docs",
+                        "session_id": s,
+                        "visitor_id": v,
+                        "device": dev,
+                        "at": (base_ts + timedelta(minutes=1)).isoformat(),
+                    }
+                )
 
         if len(batch) >= 400:
             flush(batch)
@@ -112,22 +156,41 @@ def main() -> None:
         flush(batch)
 
     # Funnel + timeline note (read key)
-    rheaders = {"X-Read-Key": read_key}
-    http.post(f"{API}/api/v1/funnels", json={
-        "name": "Signup flow",
-        "steps": [{"kind": "page", "value": "/pricing"}, {"kind": "event", "value": "signup"}, {"kind": "event", "value": "revenue"}],
-    }, headers=rheaders).raise_for_status()
-    http.post(f"{API}/api/v1/projects/{project_id}/notes", json={
-        "text": "Launched v2 pricing page", "at": (now - timedelta(days=10)).isoformat(),
-    }, headers=rheaders).raise_for_status()
-    http.post(f"{API}/api/v1/projects/{project_id}/notes", json={
-        "text": "Outage: checkout down 3h", "at": (now - timedelta(days=4)).isoformat(),
-    }, headers=rheaders).raise_for_status()
+    rheaders = {"X-Management-Key": p["management_key"]}
+    http.post(
+        f"{API}/api/v1/funnels",
+        json={
+            "name": "Signup flow",
+            "steps": [
+                {"kind": "page", "value": "/pricing"},
+                {"kind": "event", "value": "signup"},
+                {"kind": "event", "value": "revenue"},
+            ],
+        },
+        headers=rheaders,
+    ).raise_for_status()
+    http.post(
+        f"{API}/api/v1/projects/{project_id}/notes",
+        json={
+            "text": "Launched v2 pricing page",
+            "at": (now - timedelta(days=10)).isoformat(),
+        },
+        headers=rheaders,
+    ).raise_for_status()
+    http.post(
+        f"{API}/api/v1/projects/{project_id}/notes",
+        json={
+            "text": "Outage: checkout down 3h",
+            "at": (now - timedelta(days=4)).isoformat(),
+        },
+        headers=rheaders,
+    ).raise_for_status()
 
     print("\n✅ Demo data seeded.")
     print(f"   Project:   Acme SaaS ({project_id})")
     print(f"   Write key: {write_key}")
     print(f"   Read key:  {read_key}")
+    print(f"   Management key: {p['management_key']}")
     print("\nNext:")
     print("  1. cd apps/web && npm run dev   → http://localhost:5173")
     print("  2. Paste the read key, explore Overview / Revenue / Funnels / Ask / Alerts")

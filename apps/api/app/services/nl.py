@@ -1,9 +1,7 @@
 """Natural-language to analytics-plan.
 
-Two paths:
-1. Heuristic parser (always available) — handles the most common founder questions.
-2. LLM planner (when ANTHROPIC_API_KEY or OPENAI_API_KEY is configured) — falls
-   back to the heuristic parser on any failure.
+Intent classification is deterministic. Lower-confidence questions are routed
+by the ask endpoint to guarded SQL generation when a provider is configured.
 
 A *plan* is a small JSON dict the ask router executes against the analytics
 service; the MCP `ask` tool uses the same endpoint, so both surfaces stay in sync.
@@ -26,14 +24,33 @@ DATE_HINTS = [
 
 def _date_range(question: str) -> tuple[str | None, str | None]:
     q = question.lower()
-    for pattern, fn in DATE_HINTS:
-        m = re.search(pattern, q)
-        if m:
-            days = fn(m)
-            end = datetime.now(timezone.utc)
-            start = end - timedelta(days=days)
-            return start.isoformat(), end.isoformat()
-    return None, None
+    now = datetime.now(timezone.utc)
+    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    compared = re.search(r"(?:last|past) (\d+) days?.*(?:vs|versus|before)", q)
+    if compared:
+        days = min(183, max(1, int(compared.group(1))))
+        start, end = now - timedelta(days=2 * days), now
+    elif "this month" in q and "last month" in q:
+        start, end = (today.replace(day=1) - timedelta(days=1)).replace(day=1), now
+    elif "yesterday" in q:
+        start, end = today - timedelta(days=1), today
+    elif "last month" in q and "this month" not in q:
+        end = today.replace(day=1)
+        start = (end - timedelta(days=1)).replace(day=1)
+    elif "this month" in q and "last month" not in q:
+        start, end = today.replace(day=1), now
+    elif "last week" in q:
+        end = today - timedelta(days=today.weekday())
+        start = end - timedelta(days=7)
+    elif re.search(r"\btoday\b", q):
+        start, end = today, now
+    else:
+        match = re.search(r"(?:last|past) (\d+) days?", q)
+        if not match:
+            return None, None
+        days = min(366, max(1, int(match.group(1))))
+        start, end = now - timedelta(days=days), now
+    return start.isoformat(), end.isoformat()
 
 
 _FUNNEL_SEGMENTS = [
@@ -67,8 +84,7 @@ def heuristic_plan(question: str) -> dict:
     date_from, date_to = _date_range(question)
 
     def base(action: str, conf: float = 0.85, **kw) -> dict:
-        plan = {"action": action, "date_from": date_from, "date_to": date_to,
-                "confidence": conf}
+        plan = {"action": action, "date_from": date_from, "date_to": date_to, "confidence": conf}
         plan.update(kw)
         return plan
 
@@ -83,18 +99,33 @@ def heuristic_plan(question: str) -> dict:
     # destructive verbs), not a per-question hack: the heuristic's job is now
     # "answer exactly what I can; punt the rest to the agent".
     _LONGTAIL_HINTS = [
-        r"\bcompare\b", r"\bvs\.?\b", r"\bversus\b", r"difference between",
-        r"\bmoving average\b", r"\bper\b.{0,20}\b(visitor|user|customer|session)\b",
-        r"\bpercent\b", r"\bpercentage\b", r"\bratio\b",
-        r"\bday of week\b", r"\bhour of day\b", r"\bnever\b",
-        r"\bdelete\b", r"\bdrop\b",
+        r"\bcompare\b",
+        r"\bvs\.?\b",
+        r"\bversus\b",
+        r"difference between",
+        r"\bmoving average\b",
+        r"\bper\b.{0,20}\b(visitor|user|customer|session)\b",
+        r"\bpercent\b",
+        r"\bpercentage\b",
+        r"\bratio\b",
+        r"\bday of week\b",
+        r"\bhour of day\b",
+        r"\bnever\b",
+        r"\bdelete\b",
+        r"\bdrop\b",
     ]
     if any(re.search(p, q) for p in _LONGTAIL_HINTS):
         return base("overview", conf=0.25)
     if any(w in q for w in ("funnel", "leak", "drop-off", "dropoff", "convert")):
         return base("funnels", segment_by=_funnel_segment(q))
+    if "revenue" in q and any(w in q for w in ("campaign", "content", "blog", "article")):
+        return base("breakdown", dimension="utm_campaign", order_by="revenue")
     if any(w in q for w in ("content", "blog", "post", "article")):
-        return base("breakdown", dimension="utm_campaign")
+        return base("overview", conf=0.25)
+    if any(w in q for w in ("how many", "number of", "count")) and any(
+        w in q for w in ("signup", "sign up")
+    ):
+        return base("event_count", event_name="signup")
     if any(w in q for w in ("right now", "realtime", "real-time", "live", "currently")):
         return base("realtime")
     if "funnel" in q:
@@ -105,7 +136,9 @@ def heuristic_plan(question: str) -> dict:
         return base("revenue")
     if any(w in q for w in ("top pages", "most visited", "popular pages", "best pages")):
         return base("breakdown", dimension="path")
-    if any(w in q for w in ("referrer", "referral", "traffic from", "where.*come from", "sources", "channels")):
+    if re.search(r"where.*(?:come from|visitors)", q) or any(
+        w in q for w in ("referrer", "referral", "traffic from", "sources", "channels")
+    ):
         return base("breakdown", dimension="utm_source")
     if any(w in q for w in ("device", "mobile vs", "desktop")):
         return base("breakdown", dimension="device")
@@ -118,7 +151,8 @@ def heuristic_plan(question: str) -> dict:
     if any(w in q for w in ("bounce",)):
         return base("overview")
     if any(w in q for w in ("visitor", "traffic", "pageview", "how many", "growth", "trend")):
-        return base("timeseries_smart")
+        metric = "pageviews" if "pageview" in q else "sessions" if "session" in q else "visitors"
+        return base("timeseries_smart", metric=metric)
     if "mcp" in q and any(w in q for w in ("usage", "tool", "agent")):
         return base("mcp_usage")
     return base("overview", conf=0.25)

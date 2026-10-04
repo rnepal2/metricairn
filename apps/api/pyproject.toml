@@ -1,27 +1,34 @@
 [project]
-name = "agentlens-api"
+name = "metricairn-api"
 version = "0.1.0"
-description = "AgentLens API — privacy-friendly product analytics your AI agent can query"
+license = "MIT"
+description = "Metricairn API — privacy-friendly product analytics your AI agent can query"
 requires-python = ">=3.11"
 dependencies = [
-    "fastapi>=0.115",
+    "fastapi>=0.115,<0.136",
     "uvicorn[standard]>=0.30",
-    "sqlalchemy>=2.0",
+    "sqlalchemy>=2.0,<2.2",
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
     "python-dateutil>=2.9",
     "httpx>=0.27",
-    "apscheduler>=3.10",
+    "apscheduler>=3.10,<4",
+    "sqlglot>=30,<31",
+    "psycopg[binary]>=3.2,<4",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "ruff>=0.14,<0.17"]
 
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+exclude = ["tests*", "data*"]

@@ -18,7 +18,7 @@ from app.services import anomaly, notify
 # Built-in rule applied when a project has channels but no enabled rules.
 DEFAULT_RULE = {
     "id": "",
-    "name": "Default: any significant anomaly",
+    "name": "Default: unusual activity",
     "metric": "any",
     "direction": "any",
     "min_z": 3.0,
@@ -155,8 +155,13 @@ def check_project(db: Session, project_id: str) -> dict:
             ok, detail = notify.deliver(channel.kind, channel.target, subject, body)
             for k in fresh_keys:
                 log_delivery(
-                    db, project_id, channel.id, rule["id"], k,
-                    "sent" if ok else "failed", detail,
+                    db,
+                    project_id,
+                    channel.id,
+                    rule["id"],
+                    k,
+                    "sent" if ok else "failed",
+                    detail,
                 )
             summary["sent" if ok else "failed"] += 1
     return summary

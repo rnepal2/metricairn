@@ -16,25 +16,23 @@ _ALLOWED_TABLES = {"events"}
 _CONFIDENCE_THRESHOLD = 0.6
 
 
-def _from_targets(sql: str) -> set[str]:
-    """Table names referenced by FROM/JOIN, minus CTE names."""
-    stripped = _strip_literals(sql)
-    ctes = set(re.findall(r"(?i)(?:WITH|,)\s*([a-zA-Z_]\w*)\s+AS\s*\(", stripped))
-    targets = set(re.findall(r"(?i)\b(?:FROM|JOIN)\s+([a-zA-Z_]\w*)", stripped))
-    return {t.lower() for t in targets} - {c.lower() for c in ctes}
-
-
 def semantic_checks(sql: str, project_id: str) -> tuple[bool, str]:
-    """Hard gates. Returns (ok, reason); failure means confidence 0."""
-    unknown = _from_targets(sql) - _ALLOWED_TABLES
-    if unknown:
-        return False, f"query references unknown tables: {sorted(unknown)} (only 'events' is queryable)"
-    stripped = _strip_literals(sql)
-    if not re.search(r"(?i)\bproject_id\s*=", stripped):
-        return False, "query does not filter on project_id (tenant scope is mandatory)"
-    if project_id not in sql:
-        return False, "query filters project_id but not to this project's id"
-    return True, ""
+    """Validate the AST. Tenant isolation is enforced again at execution."""
+    from sqlglot import exp
+
+    from app.services.sql_sandbox import _parse, physical_tables
+
+    try:
+        tree = _parse(sql)
+        physical_tables(tree)
+    except Exception as exc:
+        return False, str(exc)
+    for eq in tree.find_all(exp.EQ):
+        for col, value in ((eq.left, eq.right), (eq.right, eq.left)):
+            if isinstance(col, exp.Column) and col.name.lower() == "project_id":
+                if isinstance(value, exp.Literal) and value.is_string and value.this == project_id:
+                    return True, ""
+    return False, "query does not filter project_id to this project's id"
 
 
 def sanity_issues(question: str, sql: str) -> list[str]:
@@ -44,7 +42,10 @@ def sanity_issues(question: str, sql: str) -> list[str]:
     s = _strip_literals(sql).lower()
     if "revenue" in q and "revenue_amount" not in s and not ("name" in s and "revenue" in s):
         issues.append("question is about revenue but the query doesn't touch revenue data")
-    if re.search(r"\b(last|past|this|yesterday|today|week|month|year|days?)\b", q) and "created_at" not in s:
+    if (
+        re.search(r"\b(last|past|this|yesterday|today|week|month|year|days?)\b", q)
+        and "created_at" not in s
+    ):
         issues.append("question implies a time window but the query doesn't filter created_at")
     return issues
 

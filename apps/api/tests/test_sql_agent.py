@@ -42,7 +42,9 @@ def test_extract_sql_cannot_answer():
 
 def test_generate_sql_uses_injected_llm():
     start, end = _window()
-    fake = lambda system, user: "```sql\nSELECT COUNT(*) AS n FROM events WHERE project_id = 'p1'\n```"
+    fake = lambda system, user: (
+        "```sql\nSELECT COUNT(*) AS n FROM events WHERE project_id = 'p1'\n```"
+    )
     sql = sql_agent.generate_sql("how many events?", "p1", start, end, llm_fn=fake)
     assert sql == "SELECT COUNT(*) AS n FROM events WHERE project_id = 'p1'"
 
@@ -71,16 +73,21 @@ def test_generate_sql_handles_llm_failure():
     assert sql_agent.generate_sql("q?", "p1", start, end, llm_fn=boom) is None
 
 
-def test_narrate_uses_injected_llm():
-    fake = lambda system, user: "There were 42 signups."
+def test_narrate_never_accepts_ungrounded_model_text():
+    fake = lambda system, user: "There were 999 signups."
     out = sql_agent.narrate("how many signups?", ["signups"], [(42,)], llm_fn=fake)
-    assert out == "There were 42 signups."
+    assert "signups=42" in out
+    assert "999" not in out
 
 
 def test_narrate_template_only_presents_rows():
     # No LLM key in test env → deterministic template, no invented numbers.
-    out = sql_agent.narrate("compare revenue?", ["month", "revenue"],
-                            [("2026-09", 1470.0), ("2026-08", 1320.0)], llm_fn=None)
+    out = sql_agent.narrate(
+        "compare revenue?",
+        ["month", "revenue"],
+        [("2026-09", 1470.0), ("2026-08", 1320.0)],
+        llm_fn=None,
+    )
     assert "1470.0" in out and "1320.0" in out
     assert "2026-09" in out
 

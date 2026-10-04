@@ -1,20 +1,12 @@
 #!/usr/bin/env python3
-"""Seed the Billwise demo — a fictional $18k MRR invoicing SaaS for freelancers,
-run solo by founder "Maya Chen". This is AgentLens's ICP: an indie SaaS founder
-who currently duct-tapes Plausible + gut feel.
+"""Seed 60 days of simulated Billwise data: traffic, payments, funnels and notes.
 
-The 60-day dataset tells a true-to-life story with three beats:
-  1. Steady growth + a Product Hunt launch spike (day -25) → anomaly: spike.
-  2. A botched Stripe key rotation (days -7..-4) → ALL payments fail for 4 days
-     while signups and traffic stay normal → anomaly: dip. The demo moment:
-     "revenue went to $0 while signups held — checkout is broken, not demand."
-  3. One hero blog post (/blog/invoice-template-excel) quietly drives a third
-     of signups, tracked via utm_campaign=invoice-template-guide → the
-     content-ROI demo moment.
-
-Usage:  apps/api/.venv/bin/python scripts/seed_billwise.py [API_URL]
-Idempotent: deletes any existing Billwise project first.
-The demo dashboard page uses a deterministic read key (see DEMO_READ_KEY).
+Run from the repo root: uv run python scripts/seed_billwise.py [LOCAL_API_URL]
+The script edits the local API database to install a public demo read key.
+It replaces only projects already carrying that key. Use the same DATABASE_URL
+and working directory as the running API; never seed customer data.
+Revenue is recorded gross payments, not an MRR measurement. The fictional
+payment incident illustrates investigation; events cannot establish its cause.
 """
 
 from __future__ import annotations
@@ -30,9 +22,18 @@ DEMO_READ_KEY = "alr_bw_demo_9f2k7q4x1m8z3d6v"
 
 random.seed(20261003)
 
-PAGES = ["/", "/pricing", "/features", "/templates", "/blog",
-         "/blog/invoice-template-excel", "/blog/freelancer-tax-checklist",
-         "/docs", "/about", "/changelog"]
+PAGES = [
+    "/",
+    "/pricing",
+    "/features",
+    "/templates",
+    "/blog",
+    "/blog/invoice-template-excel",
+    "/blog/freelancer-tax-checklist",
+    "/docs",
+    "/about",
+    "/changelog",
+]
 PAGE_W = [0.26, 0.20, 0.12, 0.08, 0.10, 0.09, 0.05, 0.05, 0.03, 0.02]
 HERO_POST = "/blog/invoice-template-excel"
 
@@ -46,10 +47,15 @@ SOURCES = [
     ("https://linkedin.com", "linkedin", 0.06),
     ("https://maya-chen-newsletter.beehiiv.com", "newsletter", 0.10),
 ]
-DEVICES = [("desktop", "Chrome", "Windows", 0.36), ("desktop", "Chrome", "macOS", 0.20),
-           ("desktop", "Safari", "macOS", 0.08), ("mobile", "Safari", "iOS", 0.18),
-           ("mobile", "Chrome", "Android", 0.12), ("desktop", "Firefox", "Linux", 0.04),
-           ("tablet", "Safari", "iOS", 0.02)]
+DEVICES = [
+    ("desktop", "Chrome", "Windows", 0.36),
+    ("desktop", "Chrome", "macOS", 0.20),
+    ("desktop", "Safari", "macOS", 0.08),
+    ("mobile", "Safari", "iOS", 0.18),
+    ("mobile", "Chrome", "Android", 0.12),
+    ("desktop", "Firefox", "Linux", 0.04),
+    ("tablet", "Safari", "iOS", 0.02),
+]
 
 
 def pick(weighted):
@@ -63,28 +69,45 @@ def pick(weighted):
 
 
 def main() -> None:
+    from urllib.parse import urlparse
+
+    if urlparse(API).hostname not in {"localhost", "127.0.0.1", "::1"}:
+        raise SystemExit(
+            "Billwise seeding requires the local API and its local database; remote seeding is unsupported."
+        )
     http = httpx.Client(timeout=60, trust_env=False)
 
     # Idempotent: wipe any previous Billwise seed (direct DB, cascade).
     import os
 
-    os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "apps", "api"))
-    sys.path.insert(0, "apps/api")
+    sys.path.insert(
+        0, str(__import__("pathlib").Path(__file__).resolve().parents[1] / "apps" / "api")
+    )
     from app.core.database import SessionLocal, init_db
     from app.core.security import _hash
     from app.models import ApiKey, Project
 
     init_db()
     db = SessionLocal()
-    for old in db.query(Project).filter(Project.name == "Billwise").all():
+    for old in db.query(Project).join(ApiKey).filter(ApiKey.key_hash == _hash(DEMO_READ_KEY)).all():
         db.delete(old)
     db.commit()
 
     print(f"→ creating Billwise project at {API}")
-    p = http.post(f"{API}/api/v1/projects", json={"name": "Billwise", "domain": "billwise.io"}).json()
+    response = http.post(
+        f"{API}/api/v1/projects",
+        json={"name": "Billwise", "domain": "billwise.io"},
+        headers={"X-Provisioning-Token": os.environ.get("PROVISIONING_TOKEN", "")},
+    )
+    response.raise_for_status()
+    p = response.json()
     project_id, write_key = p["id"], p["write_key"]
     headers = {"X-Write-Key": write_key}
     rec = db.query(ApiKey).filter(ApiKey.project_id == project_id, ApiKey.scopes == "read").first()
+    if rec is None:
+        raise SystemExit(
+            "API project is absent from this database. Check DATABASE_URL and run the API/seeder from the same directory."
+        )
     rec.key_hash = _hash(DEMO_READ_KEY)
     rec.key_prefix = DEMO_READ_KEY[:8]
     rec.name = "demo-read"
@@ -92,15 +115,19 @@ def main() -> None:
     db.close()
 
     def flush(events: list[dict]) -> None:
+        events = [event for event in events if datetime.fromisoformat(event["at"]) <= now]
         for i in range(0, len(events), 400):
-            r = http.post(f"{API}/api/v1/ingest", json={"events": events[i:i + 400]}, headers=headers)
+            r = http.post(
+                f"{API}/api/v1/ingest", json={"events": events[i : i + 400]}, headers=headers
+            )
             r.raise_for_status()
 
     now = datetime.now(timezone.utc)
     batch: list[dict] = []
     vid = 0
-    bug_days = {7, 6, 5, 4}      # botched Stripe key rotation: ALL payments fail
-    ph_day = 25                  # Product Hunt launch
+    returning_visitors = []
+    bug_days = {7, 6, 5, 4}  # botched Stripe key rotation: ALL payments fail
+    ph_day = 25  # Product Hunt launch
 
     for ago in range(60, -1, -1):
         day = now - timedelta(days=ago)
@@ -116,6 +143,10 @@ def main() -> None:
             if ago in (ph_day, ph_day - 1) and random.random() < 0.6:
                 ref, src = "https://www.producthunt.com", "producthunt"
             dev, browser, os_, _w2 = pick(DEVICES)
+            if returning_visitors and random.random() < 0.25:
+                v, dev, browser, os_ = random.choice(returning_visitors)
+            else:
+                returning_visitors.append((v, dev, browser, os_))
             n_pv = min(6, 1 + int(random.expovariate(0.7)))
             base_ts = day.replace(hour=random.randint(8, 21), minute=random.randint(0, 59))
             entry = random.choices(PAGES, weights=PAGE_W)[0]
@@ -139,12 +170,19 @@ def main() -> None:
                 path = entry if j == 0 else random.choices(PAGES, weights=PAGE_W)[0]
                 hit_pricing = hit_pricing or path == "/pricing"
                 url = with_utm(f"https://billwise.io{path}")
-                batch.append({
-                    "name": "pageview", "url": url, "referrer": ref,
-                    "session_id": s, "visitor_id": v, "device": dev,
-                    "browser": browser, "os": os_,
-                    "at": (base_ts + timedelta(minutes=j * 2)).isoformat(),
-                })
+                batch.append(
+                    {
+                        "name": "pageview",
+                        "url": url,
+                        "referrer": ref,
+                        "session_id": s,
+                        "visitor_id": v,
+                        "device": dev,
+                        "browser": browser,
+                        "os": os_,
+                        "at": (base_ts + timedelta(minutes=j * 2)).isoformat(),
+                    }
+                )
 
             if hit_pricing:
                 # High-intent content converts better: readers who arrived via the
@@ -152,19 +190,35 @@ def main() -> None:
                 p_signup = 0.22 if hero_entry else 0.14
                 p_paid = 0.60 if hero_entry else 0.50
                 if random.random() < p_signup:
-                    batch.append({"name": "signup", "url": with_utm("https://billwise.io/signup"),
-                                  "referrer": "", "session_id": s, "visitor_id": v,
-                                  "device": dev, "browser": browser,
-                                  "at": (base_ts + timedelta(minutes=n_pv * 2 + 1)).isoformat()})
+                    batch.append(
+                        {
+                            "name": "signup",
+                            "url": with_utm("https://billwise.io/signup"),
+                            "referrer": "",
+                            "session_id": s,
+                            "visitor_id": v,
+                            "device": dev,
+                            "browser": browser,
+                            "at": (base_ts + timedelta(minutes=n_pv * 2 + 1)).isoformat(),
+                        }
+                    )
                     # The bug: botched Stripe key rotation → every payment fails,
                     # but signups and traffic continue normally.
                     if ago not in bug_days and random.random() < p_paid:
                         plan = 49 if random.random() < 0.35 else 19
-                        batch.append({"name": "revenue", "url": with_utm("https://billwise.io/checkout"),
-                                      "session_id": s, "visitor_id": v, "device": dev,
-                                      "browser": browser, "revenue_amount": plan,
-                                      "revenue_currency": "USD",
-                                      "at": (base_ts + timedelta(minutes=n_pv * 2 + 3)).isoformat()})
+                        batch.append(
+                            {
+                                "name": "revenue",
+                                "url": with_utm("https://billwise.io/checkout"),
+                                "session_id": s,
+                                "visitor_id": v,
+                                "device": dev,
+                                "browser": browser,
+                                "revenue_amount": plan,
+                                "revenue_currency": "USD",
+                                "at": (base_ts + timedelta(minutes=n_pv * 2 + 3)).isoformat(),
+                            }
+                        )
 
         if len(batch) >= 400:
             flush(batch)
@@ -173,19 +227,35 @@ def main() -> None:
         flush(batch)
 
     # Funnel + timeline notes (demo read key)
-    rh = {"X-Read-Key": DEMO_READ_KEY}
-    http.post(f"{API}/api/v1/funnels", json={
-        "name": "Signup → Paid",
-        "steps": [{"kind": "page", "value": "/pricing"},
-                  {"kind": "event", "value": "signup"},
-                  {"kind": "event", "value": "revenue"}],
-    }, headers=rh).raise_for_status()
-    for text, days_ago in [("Product Hunt launch 🚀", ph_day),
-                           ("Rotated Stripe publishable key (checkout deploy)", 7),
-                           ("Rolled back Stripe key — payments restored", 3)]:
-        http.post(f"{API}/api/v1/projects/{project_id}/notes", json={
-            "text": text, "at": (now - timedelta(days=days_ago)).isoformat(),
-        }, headers=rh).raise_for_status()
+    rh = {"X-Management-Key": p["management_key"]}
+    http.post(
+        f"{API}/api/v1/goals", json={"name": "Account signup", "event_name": "signup"}, headers=rh
+    ).raise_for_status()
+    http.post(
+        f"{API}/api/v1/funnels",
+        json={
+            "name": "Signup → Paid",
+            "steps": [
+                {"kind": "page", "value": "/pricing"},
+                {"kind": "event", "value": "signup"},
+                {"kind": "event", "value": "revenue"},
+            ],
+        },
+        headers=rh,
+    ).raise_for_status()
+    for text, days_ago in [
+        ("Product Hunt launch 🚀", ph_day),
+        ("Rotated Stripe publishable key (checkout deploy)", 7),
+        ("Rolled back Stripe key — payments restored", 3),
+    ]:
+        http.post(
+            f"{API}/api/v1/projects/{project_id}/notes",
+            json={
+                "text": text,
+                "at": (now - timedelta(days=days_ago)).isoformat(),
+            },
+            headers=rh,
+        ).raise_for_status()
 
     print("\n✅ Billwise demo seeded.")
     print(f"   Project:  Billwise ({project_id})")

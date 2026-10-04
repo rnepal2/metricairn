@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "metricairn": {
+      "command": "/ABSOLUTE/REPO/.venv/bin/python",
+      "args": ["-m", "metricairn_mcp"],
+      "env": {
+        "METRICAIRN_API_URL": "http://127.0.0.1:8000",
+        "METRICAIRN_READ_KEY": "alr_YOUR_READ_KEY"
+      }
+    }
+  }
+}
