@@ -79,3 +79,18 @@ Email delivery uses Resend (`RESEND_API_KEY`, from `ALERTS_FROM_EMAIL`).
 Without it, email attempts are logged as failed with `skipped: RESEND_API_KEY
 not configured` — Slack needs no API key. For multi-worker deployments set
 `ALERTS_SCHEDULER_ENABLED=false` on all but one instance.
+
+## Weekly digest
+
+The Monday-morning email for founders who don't live in dashboards: WoW
+deltas, this week's anomalies, top content by attributed revenue, and the
+funnel headline. Delivered to the project's alert channels (no separate
+channel setup). Schedule is UTC (`hour_utc`, default Monday 12:00 ≈ 7–8am US
+Eastern); the scheduler sends once per slot and never backfills.
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/api/v1/digest/settings` | read | `{enabled, weekday, hour_utc, last_sent_at}` |
+| PUT | `/api/v1/digest/settings` | write | `{enabled, weekday 0–6, hour_utc 0–23}` |
+| POST | `/api/v1/digest/preview` | read | Compile without sending |
+| POST | `/api/v1/digest/send` | write | Send now (requires enabled) |

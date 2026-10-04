@@ -100,4 +100,9 @@ export const api = {
   alertDeliveries: () => req<AlertDelivery[]>('/api/v1/alerts/deliveries'),
   runAlertCheck: () =>
     reqWrite<{ sent: number; skipped: number; failed: number }>('/api/v1/alerts/check', { method: 'POST' }),
+  digestSettings: () => req<{ project_id: string; enabled: boolean; weekday: number; hour_utc: number; last_sent_at: string | null }>('/api/v1/digest/settings'),
+  saveDigestSettings: (s: { enabled: boolean; weekday: number; hour_utc: number }) =>
+    reqWrite('/api/v1/digest/settings', { method: 'PUT', body: JSON.stringify(s) }),
+  digestPreview: () => req<{ subject: string; body: string }>('/api/v1/digest/preview', { method: 'POST' }),
+  sendDigestNow: () => reqWrite<{ sent: number; failed: number }>('/api/v1/digest/send', { method: 'POST' }),
 };

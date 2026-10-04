@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.core.config import get_settings
 from app.core.database import init_db
-from app.routers import alerts, ask, funnels, ingest, projects, query
+from app.routers import alerts, ask, digest, funnels, ingest, projects, query
 
 
 @asynccontextmanager
@@ -24,6 +24,7 @@ async def lifespan(app: FastAPI):
         from apscheduler.schedulers.background import BackgroundScheduler
 
         from app.services.alerting import check_all_projects
+        from app.services.digest import check_digests
 
         scheduler = BackgroundScheduler()
         scheduler.add_job(
@@ -31,6 +32,14 @@ async def lifespan(app: FastAPI):
             "interval",
             minutes=settings.alerts_check_minutes,
             id="alert_check",
+            max_instances=1,
+            coalesce=True,
+        )
+        scheduler.add_job(
+            check_digests,
+            "interval",
+            minutes=settings.alerts_check_minutes,
+            id="digest_check",
             max_instances=1,
             coalesce=True,
         )
@@ -50,7 +59,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    for r in (projects.router, ingest.router, query.router, funnels.router, ask.router, alerts.router):
+    for r in (projects.router, ingest.router, query.router, funnels.router, ask.router, alerts.router, digest.router):
         app.include_router(r)
 
     # Serve the built tracker snippet so the Settings page snippet URL works out of the box.

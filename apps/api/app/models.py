@@ -149,3 +149,19 @@ class AlertDelivery(Base):
     status: Mapped[str] = mapped_column(String(20))  # 'sent'|'failed'|'skipped'
     detail: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
+class DigestSetting(Base):
+    """Weekly founder digest: compiled from the week's numbers and delivered to
+    the project's alert channels. last_sent_at is the dedupe ledger — the
+    scheduler sends once per scheduled slot, never backfills."""
+
+    __tablename__ = "digest_settings"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True, unique=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    weekday: Mapped[int] = mapped_column(default=0)  # 0=Monday … 6=Sunday (UTC)
+    hour_utc: Mapped[int] = mapped_column(default=12)  # 12:00 UTC ≈ 7–8am US Eastern
+    last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
