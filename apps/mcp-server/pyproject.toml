@@ -1,6 +1,6 @@
 [project]
 name = "metricairn-mcp"
-version = "0.1.0"
+version = "0.2.0"
 license = "MIT"
 description = "Metricairn MCP server — let your AI agent query your product analytics"
 requires-python = ">=3.11"

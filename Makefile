@@ -11,6 +11,7 @@ test:
 	uv run pytest -q
 	npm run test:tracker
 lint:
+	uv run python scripts/check_release.py
 	uv run ruff check apps scripts
 	npm run format:check
 build:

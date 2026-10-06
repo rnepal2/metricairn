@@ -2,6 +2,7 @@
 
 import os
 import sys
+from importlib.metadata import version
 
 import httpx
 import pytest
@@ -27,6 +28,7 @@ async def test_stdio_handshake_and_tool_effects(telemetry):
         async with ClientSession(receive, send) as session:
             info = await session.initialize()
             assert info.serverInfo.name == "metricairn"
+            assert info.serverInfo.version == version("metricairn-mcp")
             assert "ask stores question text" in info.instructions
             tools = (await session.list_tools()).tools
             names = {tool.name for tool in tools}

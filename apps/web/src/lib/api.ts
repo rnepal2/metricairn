@@ -4,20 +4,6 @@ export const BASE = (
   (import.meta as ImportMeta & { env: Record<string, string> }).env.VITE_API_URL || ''
 ).replace(/\/$/, '')
 
-// Preserve existing browser credentials through the product rename.
-try {
-  for (const storage of [localStorage, sessionStorage]) {
-    for (const key of ['read_key', 'management_key', 'tracker_key']) {
-      const legacy = storage.getItem(`agentlens_${key}`)
-      if (legacy && !storage.getItem(`metricairn_${key}`))
-        storage.setItem(`metricairn_${key}`, legacy)
-      storage.removeItem(`agentlens_${key}`)
-    }
-  }
-} catch {
-  /* Credential restoration can be retried when storage is available. */
-}
-
 export function getReadKey(): string | null {
   return localStorage.getItem('metricairn_read_key')
 }

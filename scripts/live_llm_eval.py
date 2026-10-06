@@ -97,11 +97,7 @@ def run_eval(directory: Path) -> list[dict]:
 
 
 async def _evaluate(api_url: str, expected: dict) -> list[dict]:
-    env = {
-        key: value
-        for key, value in os.environ.items()
-        if not key.startswith(("METRICAIRN_", "AGENTLENS_"))
-    }
+    env = {key: value for key, value in os.environ.items() if not key.startswith("METRICAIRN_")}
     env.update(METRICAIRN_API_URL=api_url, METRICAIRN_READ_KEY="alr_test")
     corpus = [
         (

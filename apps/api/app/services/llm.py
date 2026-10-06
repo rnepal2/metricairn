@@ -12,6 +12,7 @@ from threading import Lock
 from typing import Any
 from urllib.parse import urlsplit
 
+from app import __version__
 from app.core.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
@@ -114,7 +115,7 @@ def _make_client(config: ProviderConfig):
             http_options=types.HttpOptions(
                 timeout=int(config.timeout * 1000),
                 retry_options=types.HttpRetryOptions(attempts=1),
-                headers={"x-goog-api-client": "metricairn/0.1.0"},
+                headers={"x-goog-api-client": f"metricairn/{__version__}"},
             ),
         )
     from openai import OpenAI

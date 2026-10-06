@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app import __version__
 from app.core.database import get_db
 from app.core.security import require_write_key
 from app.models import ApiKey, Event
@@ -17,7 +18,7 @@ def ping():
     """No-auth reachability check. Proxy your domain's /al/* to /api/v1/*, then
     `curl https://your-domain/al/ingest/ping` — a 200 here proves the proxy
     path works before you touch the snippet."""
-    return {"ok": True, "service": "metricairn-ingest", "version": "0.1.0"}
+    return {"ok": True, "service": "metricairn-ingest", "version": __version__}
 
 
 BOT_HINTS = ("bot", "crawler", "spider", "headless", "lighthouse", "pingdom")

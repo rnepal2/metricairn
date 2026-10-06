@@ -20,11 +20,7 @@ ALLOWED_TOOLS = {"investigate_change", "run_query", "list_goals", "goal_report",
 
 async def run(api_url: str, replay: Path | None = None) -> dict:
     # Do not inherit write/management credentials or optional tool registrations.
-    env = {
-        key: value
-        for key, value in os.environ.items()
-        if not key.startswith(("METRICAIRN_", "AGENTLENS_"))
-    }
+    env = {key: value for key, value in os.environ.items() if not key.startswith("METRICAIRN_")}
     env.update(METRICAIRN_API_URL=api_url, METRICAIRN_READ_KEY=DEMO_READ_KEY)
     parameters = StdioServerParameters(
         command=sys.executable, args=["-m", "metricairn_mcp"], env=env

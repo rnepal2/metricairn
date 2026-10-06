@@ -9,7 +9,7 @@ import httpx
 
 
 def env(name, default=""):
-    return os.environ.get(f"METRICAIRN_{name}", os.environ.get(f"AGENTLENS_{name}", default))
+    return os.environ.get(f"METRICAIRN_{name}", default)
 
 
 API_URL = env("API_URL", "http://localhost:8000").rstrip("/")

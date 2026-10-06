@@ -1,6 +1,7 @@
 """Regression tests for tenant, credential, and analytics trust boundaries."""
 
 from datetime import datetime, timedelta, timezone
+from importlib.metadata import version
 
 import pytest
 from app.core.database import Base, get_db
@@ -44,6 +45,16 @@ def track(project):
 
 def manage(project):
     return {"X-Management-Key": project["management_key"]}
+
+
+def test_public_version_matches_installed_package(contract):
+    client, _, _, _ = contract
+    expected = version("metricairn-api")
+    for path in ("/health", "/api/v1/ingest/ping"):
+        response = client.get(path)
+        assert response.status_code == 200
+        assert response.json()["version"] == expected
+    assert client.get("/openapi.json").json()["info"]["version"] == expected
 
 
 def test_project_list_is_private_and_scoped(contract):

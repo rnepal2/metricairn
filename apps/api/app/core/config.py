@@ -1,7 +1,6 @@
 """Application configuration — everything via environment, sane local defaults."""
 
 from functools import lru_cache
-from pathlib import Path
 from typing import Literal
 
 from pydantic import Field
@@ -14,13 +13,7 @@ class Settings(BaseSettings):
     app_name: str = "Metricairn API"
     provisioning_token: str = ""  # Set before exposing project creation publicly.
     # SQLite by default for zero-setup demo; set DATABASE_URL for Postgres.
-    database_url: str = Field(
-        default_factory=lambda: (
-            "sqlite:///./data/agentlens.db"
-            if Path("data/agentlens.db").exists() and not Path("data/metricairn.db").exists()
-            else "sqlite:///./data/metricairn.db"
-        )
-    )
+    database_url: str = "sqlite:///./data/metricairn.db"
     # Optional SQL generation. Auto preserves legacy key selection; no failover.
     llm_provider: Literal[
         "auto", "disabled", "openai", "anthropic", "google", "openai_compatible"

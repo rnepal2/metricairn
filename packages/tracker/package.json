@@ -7,12 +7,12 @@
   "main": "./dist/metricairn.js",
   "name": "@metricairn/tracker",
   "scripts": {
-    "build": "tsup src/tracker.ts --format iife --global-name metricairn --minify --out-dir dist && mv dist/tracker.global.js dist/metricairn.js",
+    "build": "tsup src/tracker.ts --format iife --global-name metricairn --minify --clean --out-dir dist && mv dist/tracker.global.js dist/metricairn.js",
     "dev": "tsup src/tracker.ts --format iife --watch --out-dir dist --onSuccess 'mv dist/tracker.global.js dist/metricairn.js'",
     "test": "npm run build && node --test tests/*.test.cjs"
   },
   "type": "module",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "overrides": {
     "esbuild": "^0.28.2"

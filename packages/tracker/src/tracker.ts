@@ -32,13 +32,12 @@
   }
 
   const SCRIPT = document.currentScript as HTMLScriptElement | null;
-  const API = SCRIPT?.dataset.api || (window as any).__METRICAIRN_API__ || (window as any).__AGENTLENS_API__ || "";
-  const KEY = SCRIPT?.dataset.key || (window as any).__METRICAIRN_KEY__ || (window as any).__AGENTLENS_KEY__ || "";
-  if ((window as any).__metricairn_loaded || (window as any).__agentlens_loaded) return;
+  const API = SCRIPT?.dataset.api || (window as any).__METRICAIRN_API__ || "";
+  const KEY = SCRIPT?.dataset.key || (window as any).__METRICAIRN_KEY__ || "";
+  if ((window as any).__metricairn_loaded) return;
   (window as any).__metricairn_loaded = true;
   if (navigator.doNotTrack === "1" || (navigator as any).globalPrivacyControl || SCRIPT?.dataset.disabled === "true") {
     (window as any).metricairn = { event() {}, revenue() {}, pageview() {}, context() { return null; } };
-    (window as any).agentlens = (window as any).metricairn;
     return;
   }
   const memory: Record<string, string> = {};
@@ -245,7 +244,6 @@
   };
 
   (window as any).metricairn = api;
-  (window as any).agentlens = api; // migration alias
   (window as any).al = api; // short alias
 
   if (document.readyState === "complete") trackPageview();

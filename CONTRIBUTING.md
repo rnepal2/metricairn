@@ -25,6 +25,8 @@ npm run test:e2e
 
 Tests cover tenant and credential isolation, SQL enforcement, metric arithmetic, ingestion, tracker behavior, real MCP stdio discovery, and desktop/mobile journeys. PostgreSQL tests require `TEST_POSTGRES_URL`; live-model evaluation requires provider configuration and can incur costs. CI also builds and boots the container.
 
+`make check` also verifies that workspace versions, lockfiles, and installed packages agree. Before a release, update versions and the changelog, run the checks, and verify CI against the final commit. Published tags stay fixed; new code gets a new version.
+
 `npm run format` applies the project’s Python/TypeScript formatting. Keep metric definitions, API/MCP schemas, tests, and UI labels consistent. Customer activity and internal telemetry must stay separate. Configuration writes require management access. Generated SQL always uses the enforced sandbox. Add regressions for meaningful behavioral changes; update lockfiles for dependency changes.
 
 Never commit credentials, databases, real customer events, generated builds, or test output. Documentation screenshots must use simulated data. Schema startup supports additive changes only; breaking changes need a migration and recovery plan. See [security](SECURITY.md) before reporting a vulnerability.

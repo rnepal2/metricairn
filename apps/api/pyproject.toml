@@ -1,6 +1,6 @@
 [project]
 name = "metricairn-api"
-version = "0.1.0"
+version = "0.2.0"
 license = "MIT"
 description = "Metricairn API — privacy-friendly product analytics your AI agent can query"
 requires-python = ">=3.11"

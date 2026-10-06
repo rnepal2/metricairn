@@ -20,7 +20,11 @@ Back up SQLite with its backup API or after stopping writes; do not copy a live 
 
 ## Existing installations
 
-The product was renamed from AgentLens. Existing `alw_`/`alr_`/`alm_` keys and tracker identifiers remain valid. Legacy `AGENTLENS_*` MCP environment variables, `window.agentlens`, and `/static/agentlens.js` are supported for migration; new configuration should use Metricairn. Browser credentials migrate on load. With no explicit database URL, an existing `data/agentlens.db` is used when `data/metricairn.db` is absent. Preserve `DATABASE_URL` when moving a real installation.
+Version 0.2.0 removes compatibility aliases from the previous product name. Existing `alw_`/`alr_`/`alm_` keys and tracker identifiers remain valid.
+
+Before upgrading, back up the database and set `DATABASE_URL` explicitly to the existing file or PostgreSQL database. The default SQLite file is now `data/metricairn.db`; older filenames are not detected automatically. To adopt the default filename, stop all API processes and copy the database using SQLite's backup API before restarting. Keep the original backup until the upgraded installation is verified.
+
+Use `METRICAIRN_*` MCP environment variables, `/static/metricairn.js`, and `window.metricairn`. Update custom snippets and client configuration. If credentials were saved under older browser storage names, re-enter the existing read key and optional management key in the dashboard. No data conversion or key rotation is required for this upgrade.
 
 Older projects without private management access can issue a key locally:
 
