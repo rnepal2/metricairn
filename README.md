@@ -65,13 +65,13 @@ Try: **“Investigate signup changes over the last week. Check collection covera
 
 The connector queries your running API. `ask` stores question history and may use an API-side AI provider if configured; tool-call telemetry is optional. [MCP setup and tool reference](docs/mcp.md).
 
-## Billwise worked example
+## Billwise example
 
 Maya Chen, the fictional founder of an invoicing app, investigates campaign signups, conversion, and returning visitors. Follow copyable calls and results from simulated data, then replay them through a real MCP session. [Walkthrough and demo setup](docs/use-cases/billwise.md).
 
 ## Scope
 
-Metricairn is an early project for small teams operating their own analytics. Deployments are operator-managed, without hosted user accounts or OAuth. Cookieless tracking uses browser-local identifiers; retention measures first-observed visitors, not verified people. Production scale and recovery depend on your deployment. [Metric definitions](docs/trust-and-data.md) · [Security](SECURITY.md).
+Metricairn is a lightweight, self-hosted product analytics platform with an MCP server for small teams. Deployments are operator-managed, without hosted user accounts or OAuth. Cookieless tracking uses browser-local identifiers; retention measures first-observed visitors, not verified people. Production scale and recovery depend on your deployment. [Metric definitions](docs/trust-and-data.md) · [Security](SECURITY.md).
 
 [API](docs/api.md) · [Architecture](docs/architecture.md) · [Roadmap](docs/roadmap.md) · [Product direction](docs/strategy.md)
 
