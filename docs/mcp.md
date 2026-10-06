@@ -48,7 +48,7 @@ There are 20 tools by default: 19 analytics reads and `ask`, which stores questi
 
 `ask` answers supported questions deterministically. A configured API-side AI provider can extend coverage with validated SQL; unsupported questions return an explicit fallback. Each successful response stores the question text and planner/action metadata as an internal `ask` event, even when no tracking or management key is supplied. These events appear in question history and are excluded from customer-activity metrics. Avoid sensitive question text.
 
-When the provider path is used, schema, question text, project identifiers, and date ranges are sent to that provider. Structured query and investigation tools do not use an AI provider. `ask` is annotated as non-read-only, non-destructive, non-idempotent, and potentially open-world to reflect these effects. Query annotations also reflect whether optional usage telemetry is configured. Annotations describe behavior; scoped API credentials enforce access.
+When the provider path is used, schema, question text, project identifiers, and date ranges are sent to that provider. [Provider setup](agentic-analytics.md#provider-setup) supports OpenAI, Anthropic, Google, and compatible endpoints such as Meta Muse. Structured query and investigation tools do not use an AI provider. `ask` is annotated as non-read-only, non-destructive, non-idempotent, and potentially open-world to reflect these effects. Query annotations also reflect whether optional usage telemetry is configured. Annotations describe behavior; scoped API credentials enforce access.
 
 ## Optional writes and telemetry
 

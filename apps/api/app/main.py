@@ -58,9 +58,14 @@ async def lifespan(app: FastAPI):
             coalesce=True,
         )
         scheduler.start()
-    yield
-    if scheduler:
-        scheduler.shutdown(wait=False)
+    try:
+        yield
+    finally:
+        from app.services.llm import close_clients
+
+        close_clients()
+        if scheduler:
+            scheduler.shutdown(wait=False)
 
 
 def create_app() -> FastAPI:

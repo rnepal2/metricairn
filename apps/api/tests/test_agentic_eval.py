@@ -3,8 +3,8 @@
 Tier 1 — runs in CI with a scripted LLM stand-in (canned SQL per question,
 including deliberately bad SQL). Grades the *machinery*: routing, validation
 accept/reject, honest fallback, answer grounding.
-Tier 2 — needs METRICAIRN_LIVE_EVAL=1 plus a real ANTHROPIC_API_KEY or
-OPENAI_API_KEY. Grades live end-to-end quality. Skipped in CI.
+Tier 2 — needs METRICAIRN_LIVE_EVAL=1 plus a configured provider.
+Grades a small synthetic corpus through real MCP/API/SQL calls. Skipped in CI.
 
 Seed: deterministic "EvalCo" project — 30 days of pageviews (~120/weekday,
 ~60/weekend), 5 signups/day, 2 revenue events/day ($49 newsletter / $99
@@ -27,7 +27,7 @@ from sqlalchemy.orm import sessionmaker
 PID = "evalco_proj"
 TEST_DB = "sqlite:///./data/test_agentic_eval.db"
 DB_PATH = "./data/test_agentic_eval.db"
-LIVE = bool(os.environ.get("METRICAIRN_LIVE_EVAL"))
+LIVE = os.environ.get("METRICAIRN_LIVE_EVAL") == "1"
 
 
 def seed_evalco(db):
@@ -416,11 +416,15 @@ def test_adversarial_falls_back_honestly(harness, question):
 # ---------- Tier 2: live LLM grading (needs METRICAIRN_LIVE_EVAL=1 + key) ----------
 
 
-@pytest.mark.skipif(not LIVE, reason="needs METRICAIRN_LIVE_EVAL=1 and an LLM key")
-def test_live_agentic_quality():
-    # Runs the long-tail set against the real LLM on this machine (sandbox
-    # egress blocks LLM calls from CI, so this only runs where keys work).
-    # Grading: planner == agentic_sql and seeded numbers present in answers.
-    # Implemented as a documented manual runbook rather than CI:
-    #   METRICAIRN_LIVE_EVAL=1 ANTHROPIC_API_KEY=... pytest tests/test_agentic_eval.py -k live -s
-    raise NotImplementedError("manual runbook — see docstring")
+@pytest.mark.skipif(not LIVE, reason="needs METRICAIRN_LIVE_EVAL=1 and a configured provider")
+def test_live_agentic_quality(tmp_path):
+    from app.services import llm
+
+    if not llm.llm_available():
+        pytest.fail("Configure a provider before enabling the live evaluation")
+    from scripts.live_llm_eval import run_eval
+
+    # Exercises actual SDK calls through stdio MCP and an isolated API/database.
+    results = run_eval(tmp_path)
+    assert len(results) == 6
+    print(results)

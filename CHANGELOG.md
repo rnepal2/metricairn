@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added native OpenAI, Anthropic, and Google SDK adapters plus configurable Responses/Chat Completions endpoints such as Meta Muse, with explicit provider/model selection and legacy configuration support.
+- Added bounded provider timeouts, sanitized failure diagnostics, connection cleanup, SDK contract tests, and an opt-in live MCP/API/SQL evaluation using synthetic data.
 - Refined README positioning, setup, scope, and the clearly fictional Billwise worked example.
 - Documented the Python-only MCP connector installation, deployment requirements, question history, and optional provider/telemetry effects.
 - Corrected MCP tool annotations to reflect stored questions and configured usage telemetry.

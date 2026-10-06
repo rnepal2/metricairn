@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -20,9 +21,20 @@ class Settings(BaseSettings):
             else "sqlite:///./data/metricairn.db"
         )
     )
-    # Optional LLM keys for the natural-language `ask` endpoint / MCP ask tool.
+    # Optional SQL generation. Auto preserves legacy key selection; no failover.
+    llm_provider: Literal[
+        "auto", "disabled", "openai", "anthropic", "google", "openai_compatible"
+    ] = "auto"
+    llm_model: str = ""
+    llm_api: Literal["chat_completions", "responses"] = "chat_completions"
+    llm_base_url: str = ""
+    llm_api_key: str = ""
+    llm_timeout_s: float = Field(default=12, ge=1, le=20)
+    llm_max_output_tokens: int = Field(default=4096, ge=256, le=16384)
+    llm_reasoning_effort: Literal["", "minimal", "low", "medium", "high", "xhigh"] = ""
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
+    gemini_api_key: str | None = None
     ask_model: str = "claude-haiku-4-5"
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
     # Alert delivery: email goes through Resend; Slack needs only a webhook URL.
@@ -38,7 +50,7 @@ class Settings(BaseSettings):
     # holds the tap.
     stripe_webhook_secret: str = ""
     # Agentic SQL analytics: the LLM writes SQL against the fixed event schema.
-    # Requires an LLM key (Anthropic/OpenAI); without one, ask stays deterministic.
+    # Requires a configured provider; without one, ask stays deterministic.
     agentic_sql_enabled: bool = True
     agentic_sql_timeout_s: int = Field(default=15, ge=1, le=60)
     agentic_sql_row_cap: int = Field(default=200, ge=1, le=10000)

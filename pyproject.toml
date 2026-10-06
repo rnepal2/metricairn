@@ -17,6 +17,6 @@ metricairn-mcp = { path = "apps/mcp-server", editable = true }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-pythonpath = ["apps/api", "apps/mcp-server"]
+pythonpath = [".", "apps/api", "apps/mcp-server"]
 testpaths = ["apps/api/tests", "apps/mcp-server/tests"]
 addopts = "--import-mode=importlib"
