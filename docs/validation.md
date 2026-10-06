@@ -13,6 +13,7 @@ Checks against the current source are recorded here; these do not indicate a new
 | Fresh Python-only connector installation | Passed; `uv sync --locked --no-dev`, version 0.2.0 handshake, 20-tool discovery, catalog and query calls |
 | Browser product journeys | 6 passed; JSON-error recovery, MCP examples, goals, evidence save/review/export, retention, navigation, restoration, and mobile layout |
 | Billwise replay after naming cleanup | Passed; actual stdio MCP calls against the running API and preserved local demo data |
+| Dependency advisory checks | No advisories reported by npm audit for all three workspaces or pip-audit for 63 Python production dependencies |
 
 Muse's default/low reasoning exceeded the shorter request budgets; the passing run used the settings above. This small corpus does not establish general model accuracy or production latency. PostgreSQL and Docker run in CI; real payment/delivery integrations and production load/recovery were not validated.
 

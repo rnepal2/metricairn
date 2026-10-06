@@ -12,6 +12,7 @@
 - Removed compatibility aliases from the previous product name; configuration, tracker URLs, and browser globals now use Metricairn consistently.
 - Synchronized workspace and runtime versions, including the MCP handshake, with an automated version consistency check.
 - Clean tracker builds remove obsolete assets; browser regression tests disable AI providers to keep verification deterministic.
+- Updated CI actions to supported runtimes and pinned their commits and Linux runner image.
 
 **Upgrade:** use `METRICAIRN_*` MCP settings, `/static/metricairn.js`, and `window.metricairn`. Re-enter keys if browser credentials were stored under an older name. The default SQLite file is `data/metricairn.db`; preserve an explicit `DATABASE_URL` for existing data. Project keys and tracker identifiers remain valid. See [operations](docs/operations.md#existing-installations).
 
