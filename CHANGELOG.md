@@ -1,6 +1,6 @@
 # Changes
 
-## 0.2.0 — pending release
+## 0.2.0 — 2026-10-06
 
 - Added native OpenAI, Anthropic, and Google SDK adapters plus configurable Responses/Chat Completions endpoints such as Meta Muse, with explicit provider/model selection and legacy configuration support.
 - Added bounded provider timeouts, sanitized failure diagnostics, connection cleanup, SDK contract tests, and an opt-in live MCP/API/SQL evaluation using synthetic data.
