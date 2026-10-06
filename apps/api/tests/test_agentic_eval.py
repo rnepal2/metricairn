@@ -291,6 +291,28 @@ def test_head_revenue_total_grounded(harness):
     assert f"{exp['revenue_total']:,.2f}" in body["answer"]
 
 
+@pytest.mark.parametrize(
+    "question,planner",
+    [
+        ("how much revenue did we make in the last 30 days?", "heuristic"),
+        ("compare revenue in the last 15 days vs the 15 days before that", "agentic_sql"),
+    ],
+)
+def test_read_key_questions_append_history_without_changing_activity(harness, question, planner):
+    client, sessions, _ = harness
+    before = client.get("/api/v1/query/overview", headers=R).json()
+    for _ in range(2):
+        assert _ask(client, question)["planner"] == planner
+    with sessions() as db:
+        history = db.query(Event).filter(Event.project_id == PID, Event.name == "ask").all()
+        assert len(history) == 2  # Repeated calls append; this is not an idempotent read.
+        assert all(event.props["question"] == question for event in history)
+        assert all(event.props["planner"] == planner for event in history)
+    after = client.get("/api/v1/query/overview", headers=R).json()
+    for metric in ("visitors", "pageviews", "sessions", "events", "revenue"):
+        assert after[metric] == before[metric]
+
+
 # ---------- Tier 1: long tail → agentic, grounded ----------
 
 

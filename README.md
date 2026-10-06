@@ -1,10 +1,21 @@
 # Metricairn
 
-**Free, self-hosted product analytics for your dashboard and AI agent.**
+**Open-source, self-hosted product analytics with an MCP server.**
 
-See what changed, where the change is concentrated, and what to check next. Every investigation exposes its query plan, comparison windows, collection coverage, and caveats. Save the evidence; record your decision separately.
+Track traffic, signups, and returning visitors. Investigate changes from your dashboard or AI agent, inspect query windows and collection coverage, and save reports with separate review notes.
 
 ![Metricairn investigation with simulated data](docs/assets/investigation.png)
+
+*Simulated Billwise data.*
+
+## What you get
+
+- Traffic, realtime activity, custom events, ordered funnels, conversion goals, and weekly retention.
+- Filtered queries and change investigations with segment contributions, coverage checks, timeline context, and evidence export.
+- Immutable saved reports with separate review status and notes.
+- 20 MCP tools for discovery, queries, investigations, and questions; three opt-in management tools. Structured analytics work without an AI provider.
+- A browser tracker with SPA navigation, bounded retries, deduplication, query cleanup, and DNT/GPC controls.
+- Scoped keys, credential rotation, project-data deletion, and optional alerts and digests.
 
 ## Start
 
@@ -25,22 +36,15 @@ Install the tracker on your site:
 
 Track a meaningful action with `window.metricairn.event('signup')`, then define it as a goal in the dashboard. HTTPS and a reachable deployment are required for a real site; the local container binds to loopback. See [deployment](docs/operations.md).
 
-## What you get
-
-- Traffic, realtime activity, custom events, ordered funnels, conversion goals, and weekly retention.
-- Filtered analytics queries and change investigations with additive segment counts, coverage checks, timeline context, and evidence export.
-- Immutable saved reports with separate review status and notes.
-- **20 read-only MCP tools**, plus three optional management tools. Deterministic workflows run without an LLM; natural-language SQL is optional.
-- A small browser tracker with SPA navigation, bounded retries, deduplication, query cleanup, and DNT/GPC controls.
-- Scoped keys, rotation, project-data deletion, optional alerts and digests. Existing recorded-revenue support remains optional; payment and billing expansion is deferred.
-
-## Example: Maya at Billwise
-
-Maya Chen, the fictional solo founder of an invoicing app, investigates traffic, campaign signups, conversion, and returning visitors. The demo shows copyable MCP calls beside live results from simulated events; a companion script verifies them through an actual MCP session. [Walkthrough and demo setup](docs/use-cases/billwise.md).
-
 ## Connect an agent
 
-After `make setup`, configure your MCP client:
+With the API running, install the local MCP connector in the same checkout. This step requires [uv](https://docs.astral.sh/uv/getting-started/installation/) and Python 3.12; uv can install Python automatically. Node and Make are not required for the Docker setup.
+
+```bash
+uv sync --locked --no-dev
+```
+
+Configure a client that supports stdio, replacing the absolute path and project read key:
 
 ```json
 {
@@ -57,12 +61,18 @@ After `make setup`, configure your MCP client:
 }
 ```
 
-Try: **“Investigate signup changes over the last week. Check collection coverage and show the largest changed segments before suggesting a cause.”** [MCP reference](docs/mcp.md).
+Try: **“Investigate signup changes over the last week. Check collection coverage, show the largest changed segments, and separate observations from hypotheses.”**
+
+The connector queries your running API. `ask` stores question history and may use an API-side AI provider if configured; tool-call telemetry is optional. [MCP setup and tool reference](docs/mcp.md).
+
+## Billwise worked example
+
+Maya Chen, the fictional founder of an invoicing app, investigates campaign signups, conversion, and returning visitors. Follow copyable calls and results from simulated data, then replay them through a real MCP session. [Walkthrough and demo setup](docs/use-cases/billwise.md).
 
 ## Scope
 
-Metricairn is an early open-source release for small teams operating their own analytics. Its focus is an inspectable investigation workflow—not feature parity with PostHog. There are no hosted user accounts, OAuth grants, session replay, feature flags, experiments, or high-volume rollups. Cookieless tracking still uses browser-local identifiers. [Metric definitions](docs/trust-and-data.md) · [Security](SECURITY.md).
+Metricairn is an early project for small teams operating their own analytics. Deployments are operator-managed, without hosted user accounts or OAuth. Cookieless tracking uses browser-local identifiers; retention measures first-observed visitors, not verified people. Production scale and recovery depend on your deployment. [Metric definitions](docs/trust-and-data.md) · [Security](SECURITY.md).
 
 [API](docs/api.md) · [Architecture](docs/architecture.md) · [Roadmap](docs/roadmap.md) · [Product direction](docs/strategy.md)
 
-[MIT licensed](LICENSE). All implemented features are free; there is no paid tier or license server. Self-hosting and optional external providers have their own costs. Contributions are welcome through issues and pull requests.
+[MIT licensed](LICENSE). Contributions are welcome; see [CONTRIBUTING](CONTRIBUTING.md).

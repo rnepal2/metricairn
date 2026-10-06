@@ -13,9 +13,13 @@ from metricairn_mcp.schemas import AnalyticsPlan
 
 
 @pytest.mark.asyncio
-async def test_stdio_handshake_and_read_only_tool_schemas():
+@pytest.mark.parametrize("telemetry", [False, True])
+async def test_stdio_handshake_and_tool_effects(telemetry):
     env = dict(
-        os.environ, METRICAIRN_ENABLE_NOTE_WRITE="0", METRICAIRN_ENABLE_INVESTIGATION_WRITE="0"
+        os.environ,
+        METRICAIRN_ENABLE_NOTE_WRITE="0",
+        METRICAIRN_ENABLE_INVESTIGATION_WRITE="0",
+        METRICAIRN_WRITE_KEY="alw_unused" if telemetry else "",
     )
     async with stdio_client(
         StdioServerParameters(command=sys.executable, args=["-m", "metricairn_mcp"], env=env)
@@ -23,6 +27,7 @@ async def test_stdio_handshake_and_read_only_tool_schemas():
         async with ClientSession(receive, send) as session:
             info = await session.initialize()
             assert info.serverInfo.name == "metricairn"
+            assert "ask stores question text" in info.instructions
             tools = (await session.list_tools()).tools
             names = {tool.name for tool in tools}
             assert len(names) == 20
@@ -34,7 +39,18 @@ async def test_stdio_handshake_and_read_only_tool_schemas():
                 "get_investigation",
             } <= names
             assert not {"add_note", "save_investigation", "review_investigation"} & names
-            assert all(tool.annotations.readOnlyHint for tool in tools)
+            for tool in tools:
+                annotations = tool.annotations
+                assert annotations.destructiveHint is False
+                if tool.name == "ask":
+                    assert annotations.readOnlyHint is False
+                    assert annotations.idempotentHint is False
+                    assert annotations.openWorldHint is True
+                    assert "store its text in project history" in tool.description
+                else:
+                    assert annotations.readOnlyHint is (not telemetry)
+                    assert annotations.idempotentHint is (not telemetry)
+                    assert annotations.openWorldHint is False
             plan = next(tool for tool in tools if tool.name == "run_query").inputSchema
             assert "plan" in plan["properties"] and "$defs" in plan
             for name in ("goal_report", "retention_report"):
